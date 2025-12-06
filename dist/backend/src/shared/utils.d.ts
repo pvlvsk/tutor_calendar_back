@@ -1,0 +1,12 @@
+import { Lesson } from '../database/entities';
+import { AttendanceStats, SubjectStats, TeacherStats, DebtInfo } from './types';
+export declare function calculateAttendanceRate(attended: number, total: number): number;
+export declare function calculateAttendanceStats(lessons: Lesson[]): AttendanceStats;
+export declare function calculateStatsBySubject(lessons: Lesson[]): SubjectStats[];
+export declare function calculateStatsByTeacher(lessons: Lesson[]): TeacherStats[];
+export declare function calculateDebtInfo(unpaidLessons: Lesson[]): DebtInfo;
+export declare function getDayOfWeekRu(date: Date): string;
+export declare function getBotUsername(): string;
+export declare function generateInviteUrl(code: string): string;
+export declare function generateFallbackUrl(code: string): string;
+export declare function formatFullName(firstName?: string | null, lastName?: string | null): string;
