@@ -23,7 +23,8 @@
 ## Переменные окружения
 
 ```env
-TELEGRAM_BOT_TOKEN=your_bot_token_here
+BOT_TOKEN=your_bot_token_here
+BOT_USERNAME=your_bot
 ```
 
 ## Проверка initData

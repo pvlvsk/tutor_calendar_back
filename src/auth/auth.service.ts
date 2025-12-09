@@ -3,12 +3,21 @@
  * Управляет регистрацией, аутентификацией и связыванием пользователей
  */
 
-import { Injectable, UnauthorizedException, ConflictException, ForbiddenException, BadRequestException, GoneException, NotFoundException, Logger } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { nanoid } from 'nanoid';
-import { TelegramService, TelegramUser } from './telegram.service';
+import {
+  Injectable,
+  UnauthorizedException,
+  ConflictException,
+  ForbiddenException,
+  BadRequestException,
+  GoneException,
+  NotFoundException,
+  Logger,
+} from "@nestjs/common";
+import { JwtService } from "@nestjs/jwt";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository } from "typeorm";
+import { nanoid } from "nanoid";
+import { TelegramService, TelegramUser } from "./telegram.service";
 import {
   User,
   TeacherProfile,
@@ -17,10 +26,14 @@ import {
   Invitation,
   TeacherStudentLink,
   ParentStudentRelation,
-} from '../database/entities';
-import { generateInviteUrl, formatFullName, getBotUsername } from '../shared/utils';
+} from "../database/entities";
+import {
+  generateInviteUrl,
+  formatFullName,
+  getBotUsername,
+} from "../shared/utils";
 
-type UserRole = 'teacher' | 'student' | 'parent';
+type UserRole = "teacher" | "student" | "parent";
 
 /**
  * Генерирует уникальный реферальный код с префиксом
@@ -57,7 +70,7 @@ export class AuthService {
     @InjectRepository(ParentStudentRelation)
     private parentStudentRelationRepository: Repository<ParentStudentRelation>,
     private jwtService: JwtService,
-    private telegramService: TelegramService,
+    private telegramService: TelegramService
   ) {}
 
   // ============================================
@@ -72,14 +85,16 @@ export class AuthService {
     const telegramUser = this.telegramService.validateInitData(initData);
     if (!telegramUser) {
       this.logger.warn(`Init failed: invalid initData`);
-      throw new UnauthorizedException('INVALID_INIT_DATA');
+      throw new UnauthorizedException("INVALID_INIT_DATA");
     }
 
-    this.logger.log(`Init: tg=${telegramUser.id} @${telegramUser.username || 'no_username'}`);
+    this.logger.log(
+      `Init: tg=${telegramUser.id} @${telegramUser.username || "no_username"}`
+    );
 
     const user = await this.userRepository.findOne({
       where: { telegramId: String(telegramUser.id) },
-      relations: ['teacherProfile', 'studentProfile', 'parentProfile'],
+      relations: ["teacherProfile", "studentProfile", "parentProfile"],
     });
 
     if (!user) {
@@ -96,7 +111,9 @@ export class AuthService {
     }
 
     const roles = this.getUserRoles(user);
-    this.logger.log(`Init: existing user tg=${telegramUser.id} roles=${roles.join(',')}`);
+    this.logger.log(
+      `Init: existing user tg=${telegramUser.id} roles=${roles.join(",")}`
+    );
 
     if (roles.length === 1) {
       const token = this.generateToken(user, roles[0]);
@@ -125,7 +142,7 @@ export class AuthService {
     const telegramUser = this.telegramService.validateInitData(initData);
     if (!telegramUser) {
       this.logger.warn(`Register failed: invalid initData`);
-      throw new UnauthorizedException('INVALID_INIT_DATA');
+      throw new UnauthorizedException("INVALID_INIT_DATA");
     }
 
     const existing = await this.userRepository.findOne({
@@ -134,7 +151,7 @@ export class AuthService {
 
     if (existing) {
       this.logger.warn(`Register failed: user exists tg=${telegramUser.id}`);
-      throw new ConflictException('USER_EXISTS');
+      throw new ConflictException("USER_EXISTS");
     }
 
     const user = this.userRepository.create({
@@ -149,7 +166,9 @@ export class AuthService {
     const userWithProfile = { ...user, [`${role}Profile`]: profile };
     const token = this.generateToken(userWithProfile, role);
 
-    this.logger.log(`Register: tg=${telegramUser.id} role=${role} userId=${user.id}`);
+    this.logger.log(
+      `Register: tg=${telegramUser.id} role=${role} userId=${user.id}`
+    );
 
     return {
       user: this.formatUser(user),
@@ -166,21 +185,21 @@ export class AuthService {
   async selectRole(initData: string, role: UserRole) {
     const telegramUser = this.telegramService.validateInitData(initData);
     if (!telegramUser) {
-      throw new UnauthorizedException('INVALID_INIT_DATA');
+      throw new UnauthorizedException("INVALID_INIT_DATA");
     }
 
     const user = await this.userRepository.findOne({
       where: { telegramId: String(telegramUser.id) },
-      relations: ['teacherProfile', 'studentProfile', 'parentProfile'],
+      relations: ["teacherProfile", "studentProfile", "parentProfile"],
     });
 
     if (!user) {
-      throw new UnauthorizedException('USER_NOT_FOUND');
+      throw new UnauthorizedException("USER_NOT_FOUND");
     }
 
     const roles = this.getUserRoles(user);
     if (!roles.includes(role)) {
-      throw new ForbiddenException('ROLE_NOT_AVAILABLE');
+      throw new ForbiddenException("ROLE_NOT_AVAILABLE");
     }
 
     const token = this.generateToken(user, role);
@@ -199,16 +218,16 @@ export class AuthService {
   async addRole(userId: string, role: UserRole) {
     const user = await this.userRepository.findOne({
       where: { id: userId },
-      relations: ['teacherProfile', 'studentProfile', 'parentProfile'],
+      relations: ["teacherProfile", "studentProfile", "parentProfile"],
     });
 
     if (!user) {
-      throw new UnauthorizedException('USER_NOT_FOUND');
+      throw new UnauthorizedException("USER_NOT_FOUND");
     }
 
     const roles = this.getUserRoles(user);
     if (roles.includes(role)) {
-      throw new ConflictException('ROLE_EXISTS');
+      throw new ConflictException("ROLE_EXISTS");
     }
 
     const profile = await this.createProfile(userId, role, {
@@ -233,11 +252,11 @@ export class AuthService {
   async getMe(userId: string, role: UserRole) {
     const user = await this.userRepository.findOne({
       where: { id: userId },
-      relations: ['teacherProfile', 'studentProfile', 'parentProfile'],
+      relations: ["teacherProfile", "studentProfile", "parentProfile"],
     });
 
     if (!user) {
-      throw new UnauthorizedException('USER_NOT_FOUND');
+      throw new UnauthorizedException("USER_NOT_FOUND");
     }
 
     const roles = this.getUserRoles(user);
@@ -279,11 +298,11 @@ export class AuthService {
   async refresh(userId: string, role: UserRole) {
     const user = await this.userRepository.findOne({
       where: { id: userId },
-      relations: ['teacherProfile', 'studentProfile', 'parentProfile'],
+      relations: ["teacherProfile", "studentProfile", "parentProfile"],
     });
 
     if (!user) {
-      throw new UnauthorizedException('USER_NOT_FOUND');
+      throw new UnauthorizedException("USER_NOT_FOUND");
     }
 
     const token = this.generateToken(user, role);
@@ -299,28 +318,38 @@ export class AuthService {
    * Установка статуса бета-тестера
    * Только для администраторов или по специальному коду
    */
-  async setBetaTester(userId: string, isBetaTester: boolean, adminCode?: string) {
-    const validAdminCode = process.env.ADMIN_CODE || 'admin_secret_code';
-    
+  async setBetaTester(
+    userId: string,
+    isBetaTester: boolean,
+    adminCode?: string
+  ) {
+    const validAdminCode = process.env.ADMIN_CODE || "admin_secret_code";
+
     if (adminCode !== validAdminCode) {
-      this.logger.warn(`SetBetaTester failed: invalid admin code for user=${userId}`);
-      throw new ForbiddenException('INVALID_ADMIN_CODE');
+      this.logger.warn(
+        `SetBetaTester failed: invalid admin code for user=${userId}`
+      );
+      throw new ForbiddenException("INVALID_ADMIN_CODE");
     }
 
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) {
-      throw new NotFoundException('USER_NOT_FOUND');
+      throw new NotFoundException("USER_NOT_FOUND");
     }
 
     user.isBetaTester = isBetaTester;
     await this.userRepository.save(user);
 
-    this.logger.log(`SetBetaTester: user=${userId} isBetaTester=${isBetaTester}`);
+    this.logger.log(
+      `SetBetaTester: user=${userId} isBetaTester=${isBetaTester}`
+    );
 
     return {
       userId: user.id,
       isBetaTester: user.isBetaTester,
-      message: isBetaTester ? 'Бета-тестер активирован' : 'Бета-тестер деактивирован',
+      message: isBetaTester
+        ? "Бета-тестер активирован"
+        : "Бета-тестер деактивирован",
     };
   }
 
@@ -328,23 +357,25 @@ export class AuthService {
    * Активация бета-тестера по коду (для самостоятельной активации)
    */
   async activateBetaTester(userId: string, betaCode: string) {
-    const validBetaCode = process.env.BETA_CODE || 'beta_2025';
-    
+    const validBetaCode = process.env.BETA_CODE || "beta_2025";
+
     if (betaCode !== validBetaCode) {
-      this.logger.warn(`ActivateBetaTester failed: invalid code for user=${userId}`);
-      throw new BadRequestException('INVALID_BETA_CODE');
+      this.logger.warn(
+        `ActivateBetaTester failed: invalid code for user=${userId}`
+      );
+      throw new BadRequestException("INVALID_BETA_CODE");
     }
 
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) {
-      throw new NotFoundException('USER_NOT_FOUND');
+      throw new NotFoundException("USER_NOT_FOUND");
     }
 
     if (user.isBetaTester) {
       return {
         userId: user.id,
         isBetaTester: true,
-        message: 'Вы уже бета-тестер',
+        message: "Вы уже бета-тестер",
       };
     }
 
@@ -356,7 +387,7 @@ export class AuthService {
     return {
       userId: user.id,
       isBetaTester: true,
-      message: 'Добро пожаловать в программу бета-тестирования!',
+      message: "Добро пожаловать в программу бета-тестирования!",
     };
   }
 
@@ -368,22 +399,26 @@ export class AuthService {
    * Принятие временного приглашения
    * @deprecated Используйте joinByReferral с постоянными ссылками
    */
-  async acceptInvitation(initData: string | null, invitationToken: string, userId?: string) {
+  async acceptInvitation(
+    initData: string | null,
+    invitationToken: string,
+    userId?: string
+  ) {
     const invitation = await this.invitationRepository.findOne({
       where: { token: invitationToken },
-      relations: ['teacher', 'teacher.user'],
+      relations: ["teacher", "teacher.user"],
     });
 
     if (!invitation) {
-      throw new BadRequestException('INVALID_INVITATION');
+      throw new BadRequestException("INVALID_INVITATION");
     }
 
     if (invitation.usedAt) {
-      throw new GoneException('INVITATION_USED');
+      throw new GoneException("INVITATION_USED");
     }
 
     if (new Date() > invitation.expiresAt) {
-      throw new GoneException('INVITATION_EXPIRED');
+      throw new GoneException("INVITATION_EXPIRED");
     }
 
     let user: User | null = null;
@@ -392,17 +427,17 @@ export class AuthService {
     if (userId) {
       user = await this.userRepository.findOne({
         where: { id: userId },
-        relations: ['teacherProfile', 'studentProfile', 'parentProfile'],
+        relations: ["teacherProfile", "studentProfile", "parentProfile"],
       });
     } else if (initData) {
       telegramUser = this.telegramService.validateInitData(initData);
       if (!telegramUser) {
-        throw new UnauthorizedException('INVALID_INIT_DATA');
+        throw new UnauthorizedException("INVALID_INIT_DATA");
       }
 
       user = await this.userRepository.findOne({
         where: { telegramId: String(telegramUser.id) },
-        relations: ['teacherProfile', 'studentProfile', 'parentProfile'],
+        relations: ["teacherProfile", "studentProfile", "parentProfile"],
       });
 
       if (!user) {
@@ -415,29 +450,33 @@ export class AuthService {
         await this.userRepository.save(newUser);
         user = await this.userRepository.findOne({
           where: { id: newUser.id },
-          relations: ['teacherProfile', 'studentProfile', 'parentProfile'],
+          relations: ["teacherProfile", "studentProfile", "parentProfile"],
         });
       }
     }
 
     if (!user) {
-      throw new UnauthorizedException('USER_NOT_FOUND');
+      throw new UnauthorizedException("USER_NOT_FOUND");
     }
 
     const role = invitation.type as UserRole;
     let profile = this.getProfile(user, role);
 
     if (!profile) {
-      profile = await this.createProfile(user.id, role, telegramUser || {
-        id: Number(user.telegramId),
-        first_name: user.firstName || undefined,
-        last_name: user.lastName || undefined,
-        username: user.username || undefined,
-      });
+      profile = await this.createProfile(
+        user.id,
+        role,
+        telegramUser || {
+          id: Number(user.telegramId),
+          first_name: user.firstName || undefined,
+          last_name: user.lastName || undefined,
+          username: user.username || undefined,
+        }
+      );
       (user as any)[`${role}Profile`] = profile;
     }
 
-    if (role === 'student' && profile) {
+    if (role === "student" && profile) {
       const existingLink = await this.teacherStudentLinkRepository.findOne({
         where: { teacherId: invitation.teacherId, studentId: profile.id },
       });
@@ -448,10 +487,15 @@ export class AuthService {
         });
         await this.teacherStudentLinkRepository.save(link);
       }
-    } else if (role === 'parent' && invitation.studentId && profile) {
-      const existingRelation = await this.parentStudentRelationRepository.findOne({
-        where: { parentId: profile.id, studentId: invitation.studentId, teacherId: invitation.teacherId },
-      });
+    } else if (role === "parent" && invitation.studentId && profile) {
+      const existingRelation =
+        await this.parentStudentRelationRepository.findOne({
+          where: {
+            parentId: profile.id,
+            studentId: invitation.studentId,
+            teacherId: invitation.teacherId,
+          },
+        });
       if (!existingRelation) {
         const relation = this.parentStudentRelationRepository.create({
           parentId: profile.id,
@@ -497,18 +541,18 @@ export class AuthService {
     const telegramUser = this.telegramService.validateInitData(initData);
     if (!telegramUser) {
       this.logger.warn(`Join failed: invalid initData code=${referralCode}`);
-      throw new UnauthorizedException('INVALID_INIT_DATA');
+      throw new UnauthorizedException("INVALID_INIT_DATA");
     }
 
     this.logger.log(`Join: tg=${telegramUser.id} code=${referralCode}`);
 
-    if (referralCode.startsWith('T_')) {
+    if (referralCode.startsWith("T_")) {
       return this.joinTeacher(telegramUser, referralCode);
-    } else if (referralCode.startsWith('P_')) {
+    } else if (referralCode.startsWith("P_")) {
       return this.joinAsParent(telegramUser, referralCode);
     } else {
       this.logger.warn(`Join failed: invalid code format code=${referralCode}`);
-      throw new BadRequestException('INVALID_REFERRAL_CODE');
+      throw new BadRequestException("INVALID_REFERRAL_CODE");
     }
   }
 
@@ -518,34 +562,42 @@ export class AuthService {
   private async joinTeacher(telegramUser: TelegramUser, referralCode: string) {
     const teacher = await this.teacherProfileRepository.findOne({
       where: { referralCode },
-      relations: ['user'],
+      relations: ["user"],
     });
 
     if (!teacher) {
-      this.logger.warn(`JoinTeacher failed: teacher not found code=${referralCode}`);
-      throw new NotFoundException('TEACHER_NOT_FOUND');
+      this.logger.warn(
+        `JoinTeacher failed: teacher not found code=${referralCode}`
+      );
+      throw new NotFoundException("TEACHER_NOT_FOUND");
     }
 
     let user = await this.findOrCreateUser(telegramUser);
 
     let studentProfile = user.studentProfile;
     if (!studentProfile) {
-      studentProfile = await this.createProfile(user.id, 'student', telegramUser) as StudentProfile;
+      studentProfile = (await this.createProfile(
+        user.id,
+        "student",
+        telegramUser
+      )) as StudentProfile;
       user.studentProfile = studentProfile;
     }
 
     await this.ensureTeacherStudentLink(teacher.id, studentProfile.id);
 
     const roles = this.getUserRoles(user);
-    const token = this.generateToken(user, 'student');
+    const token = this.generateToken(user, "student");
 
-    this.logger.log(`JoinTeacher: tg=${telegramUser.id} linked to teacher=${teacher.id}`);
+    this.logger.log(
+      `JoinTeacher: tg=${telegramUser.id} linked to teacher=${teacher.id}`
+    );
 
     const botUsername = getBotUsername();
     return {
       user: this.formatUser(user),
       roles,
-      currentRole: 'student' as UserRole,
+      currentRole: "student" as UserRole,
       token,
       teacher: {
         id: teacher.id,
@@ -559,38 +611,53 @@ export class AuthService {
   /**
    * Присоединение родителя к ученику по P_xxx коду
    */
-  private async joinAsParent(telegramUser: TelegramUser, parentInviteCode: string) {
+  private async joinAsParent(
+    telegramUser: TelegramUser,
+    parentInviteCode: string
+  ) {
     const student = await this.studentProfileRepository.findOne({
       where: { parentInviteCode },
-      relations: ['user', 'teacherStudentLinks', 'teacherStudentLinks.teacher'],
+      relations: ["user", "teacherStudentLinks", "teacherStudentLinks.teacher"],
     });
 
     if (!student) {
-      this.logger.warn(`JoinAsParent failed: student not found code=${parentInviteCode}`);
-      throw new NotFoundException('STUDENT_NOT_FOUND');
+      this.logger.warn(
+        `JoinAsParent failed: student not found code=${parentInviteCode}`
+      );
+      throw new NotFoundException("STUDENT_NOT_FOUND");
     }
 
     let user = await this.findOrCreateUser(telegramUser);
 
     let parentProfile = user.parentProfile;
     if (!parentProfile) {
-      parentProfile = await this.createProfile(user.id, 'parent', telegramUser) as ParentProfile;
+      parentProfile = (await this.createProfile(
+        user.id,
+        "parent",
+        telegramUser
+      )) as ParentProfile;
       user.parentProfile = parentProfile;
     }
 
     for (const link of student.teacherStudentLinks) {
-      await this.ensureParentStudentRelation(parentProfile.id, student.id, link.teacherId);
+      await this.ensureParentStudentRelation(
+        parentProfile.id,
+        student.id,
+        link.teacherId
+      );
     }
 
     const roles = this.getUserRoles(user);
-    const token = this.generateToken(user, 'parent');
+    const token = this.generateToken(user, "parent");
 
-    this.logger.log(`JoinAsParent: tg=${telegramUser.id} linked to student=${student.id}`);
+    this.logger.log(
+      `JoinAsParent: tg=${telegramUser.id} linked to student=${student.id}`
+    );
 
     return {
       user: this.formatUser(user),
       roles,
-      currentRole: 'parent' as UserRole,
+      currentRole: "parent" as UserRole,
       token,
       student: {
         id: student.id,
@@ -609,7 +676,7 @@ export class AuthService {
   private async findOrCreateUser(telegramUser: TelegramUser): Promise<User> {
     let user = await this.userRepository.findOne({
       where: { telegramId: String(telegramUser.id) },
-      relations: ['teacherProfile', 'studentProfile', 'parentProfile'],
+      relations: ["teacherProfile", "studentProfile", "parentProfile"],
     });
 
     if (!user) {
@@ -622,12 +689,12 @@ export class AuthService {
       await this.userRepository.save(newUser);
       user = await this.userRepository.findOne({
         where: { id: newUser.id },
-        relations: ['teacherProfile', 'studentProfile', 'parentProfile'],
+        relations: ["teacherProfile", "studentProfile", "parentProfile"],
       });
     }
 
     if (!user) {
-      throw new UnauthorizedException('USER_NOT_FOUND');
+      throw new UnauthorizedException("USER_NOT_FOUND");
     }
 
     return user;
@@ -653,10 +720,16 @@ export class AuthService {
   /**
    * Создаёт связь родитель-ученик-учитель, если не существует
    */
-  private async ensureParentStudentRelation(parentId: string, studentId: string, teacherId: string) {
-    const existingRelation = await this.parentStudentRelationRepository.findOne({
-      where: { parentId, studentId, teacherId },
-    });
+  private async ensureParentStudentRelation(
+    parentId: string,
+    studentId: string,
+    teacherId: string
+  ) {
+    const existingRelation = await this.parentStudentRelationRepository.findOne(
+      {
+        where: { parentId, studentId, teacherId },
+      }
+    );
 
     if (!existingRelation) {
       const relation = this.parentStudentRelationRepository.create({
@@ -674,9 +747,9 @@ export class AuthService {
    */
   private getUserRoles(user: User): UserRole[] {
     const roles: UserRole[] = [];
-    if (user.teacherProfile) roles.push('teacher');
-    if (user.studentProfile) roles.push('student');
-    if (user.parentProfile) roles.push('parent');
+    if (user.teacherProfile) roles.push("teacher");
+    if (user.studentProfile) roles.push("student");
+    if (user.parentProfile) roles.push("parent");
     return roles;
   }
 
@@ -685,33 +758,42 @@ export class AuthService {
    */
   private getProfile(user: User, role: UserRole) {
     switch (role) {
-      case 'teacher': return user.teacherProfile;
-      case 'student': return user.studentProfile;
-      case 'parent': return user.parentProfile;
+      case "teacher":
+        return user.teacherProfile;
+      case "student":
+        return user.studentProfile;
+      case "parent":
+        return user.parentProfile;
     }
   }
 
   /**
    * Создаёт профиль для указанной роли
    */
-  private async createProfile(userId: string, role: UserRole, telegramUser: TelegramUser) {
+  private async createProfile(
+    userId: string,
+    role: UserRole,
+    telegramUser: TelegramUser
+  ) {
     switch (role) {
-      case 'teacher': {
+      case "teacher": {
         const profile = this.teacherProfileRepository.create({
           userId,
-          displayName: formatFullName(telegramUser.first_name, telegramUser.last_name) || 'Учитель',
-          referralCode: generateReferralCode('T'),
+          displayName:
+            formatFullName(telegramUser.first_name, telegramUser.last_name) ||
+            "Учитель",
+          referralCode: generateReferralCode("T"),
         });
         return this.teacherProfileRepository.save(profile);
       }
-      case 'student': {
-        const profile = this.studentProfileRepository.create({ 
+      case "student": {
+        const profile = this.studentProfileRepository.create({
           userId,
-          parentInviteCode: generateReferralCode('P'),
+          parentInviteCode: generateReferralCode("P"),
         });
         return this.studentProfileRepository.save(profile);
       }
-      case 'parent': {
+      case "parent": {
         const profile = this.parentProfileRepository.create({ userId });
         return this.parentProfileRepository.save(profile);
       }
@@ -727,7 +809,7 @@ export class AuthService {
       sub: user.id,
       telegramId: Number(user.telegramId),
       role,
-      profileId: profile?.id || '',
+      profileId: profile?.id || "",
       isBetaTester: user.isBetaTester || false,
     };
     return this.jwtService.sign(payload);
@@ -751,7 +833,7 @@ export class AuthService {
    * Форматирует профиль для ответа
    */
   private formatProfile(profile: any, role: UserRole) {
-    if (role === 'teacher') {
+    if (role === "teacher") {
       return {
         id: profile.id,
         displayName: profile.displayName,

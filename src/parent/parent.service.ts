@@ -3,20 +3,25 @@
  * Просмотр информации о детях, их уроках и статистике
  */
 
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between } from 'typeorm';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository, Between } from "typeorm";
 import {
   ParentProfile,
   ParentStudentRelation,
   TeacherStudentLink,
   Lesson,
+  LessonStudent,
   StudentProfile,
   TeacherProfile,
   Subject,
-} from '../database/entities';
-import { StatsService, DebtService } from '../shared';
-import { LessonFilters } from '../shared/types';
+} from "../database/entities";
+import { StatsService, DebtService } from "../shared";
+import { LessonFilters } from "../shared/types";
 
 @Injectable()
 export class ParentService {
@@ -29,6 +34,8 @@ export class ParentService {
     private linkRepo: Repository<TeacherStudentLink>,
     @InjectRepository(Lesson)
     private lessonRepo: Repository<Lesson>,
+    @InjectRepository(LessonStudent)
+    private lessonStudentRepo: Repository<LessonStudent>,
     @InjectRepository(StudentProfile)
     private studentProfileRepo: Repository<StudentProfile>,
     @InjectRepository(TeacherProfile)
@@ -36,7 +43,7 @@ export class ParentService {
     @InjectRepository(Subject)
     private subjectRepo: Repository<Subject>,
     private statsService: StatsService,
-    private debtService: DebtService,
+    private debtService: DebtService
   ) {}
 
   // ============================================
@@ -49,9 +56,9 @@ export class ParentService {
   async getProfile(parentId: string) {
     const profile = await this.parentProfileRepo.findOne({
       where: { id: parentId },
-      relations: ['user'],
+      relations: ["user"],
     });
-    if (!profile) throw new NotFoundException('PARENT_NOT_FOUND');
+    if (!profile) throw new NotFoundException("PARENT_NOT_FOUND");
 
     return {
       id: profile.id,
@@ -72,8 +79,10 @@ export class ParentService {
    * Обновляет профиль родителя
    */
   async updateProfile(parentId: string, customFields: Record<string, string>) {
-    const profile = await this.parentProfileRepo.findOne({ where: { id: parentId } });
-    if (!profile) throw new NotFoundException('PARENT_NOT_FOUND');
+    const profile = await this.parentProfileRepo.findOne({
+      where: { id: parentId },
+    });
+    if (!profile) throw new NotFoundException("PARENT_NOT_FOUND");
 
     profile.customFields = customFields;
     await this.parentProfileRepo.save(profile);
@@ -90,14 +99,16 @@ export class ParentService {
   async getChildren(parentId: string) {
     const relations = await this.relationRepo.find({
       where: { parentId },
-      relations: ['student', 'student.user', 'teacher'],
+      relations: ["student", "student.user", "teacher"],
     });
 
     const childMap = new Map<string, any>();
 
     for (const rel of relations) {
       if (!childMap.has(rel.studentId)) {
-        const stats = await this.statsService.getDetailedStatsForStudent(rel.studentId);
+        const stats = await this.statsService.getDetailedStatsForStudent(
+          rel.studentId
+        );
         childMap.set(rel.studentId, {
           childId: rel.studentId,
           childUser: this.formatUserInfo(rel.student.user),
@@ -123,13 +134,13 @@ export class ParentService {
     const relation = await this.relationRepo.findOne({
       where: { parentId, studentId: childId },
     });
-    if (!relation) throw new ForbiddenException('NOT_YOUR_CHILD');
+    if (!relation) throw new ForbiddenException("NOT_YOUR_CHILD");
 
     const student = await this.studentProfileRepo.findOne({
       where: { id: childId },
-      relations: ['user'],
+      relations: ["user"],
     });
-    if (!student) throw new NotFoundException('CHILD_NOT_FOUND');
+    if (!student) throw new NotFoundException("CHILD_NOT_FOUND");
 
     const teachers = await this.getChildTeachers(parentId, childId);
     const stats = await this.statsService.getDetailedStatsForStudent(childId);
@@ -151,10 +162,10 @@ export class ParentService {
   async getChildTeachers(parentId: string, childId: string) {
     const relations = await this.relationRepo.find({
       where: { parentId, studentId: childId },
-      relations: ['teacher', 'teacher.user'],
+      relations: ["teacher", "teacher.user"],
     });
 
-    if (relations.length === 0) throw new ForbiddenException('NOT_YOUR_CHILD');
+    if (relations.length === 0) throw new ForbiddenException("NOT_YOUR_CHILD");
 
     const result = [];
     for (const rel of relations) {
@@ -162,7 +173,11 @@ export class ParentService {
         where: { teacherId: rel.teacherId },
       });
 
-      const statsWithTeacher = await this.statsService.getStatsForStudentWithTeacher(childId, rel.teacherId);
+      const statsWithTeacher =
+        await this.statsService.getStatsForStudentWithTeacher(
+          childId,
+          rel.teacherId
+        );
 
       result.push({
         teacherId: rel.teacherId,
@@ -184,24 +199,32 @@ export class ParentService {
   /**
    * Получает детальную информацию об учителе ребёнка
    */
-  async getChildTeacherDetails(parentId: string, childId: string, teacherId: string) {
+  async getChildTeacherDetails(
+    parentId: string,
+    childId: string,
+    teacherId: string
+  ) {
     const relation = await this.relationRepo.findOne({
       where: { parentId, studentId: childId, teacherId },
     });
-    if (!relation) throw new ForbiddenException('NOT_YOUR_CHILD');
+    if (!relation) throw new ForbiddenException("NOT_YOUR_CHILD");
 
     const teacher = await this.teacherProfileRepo.findOne({
       where: { id: teacherId },
-      relations: ['user'],
+      relations: ["user"],
     });
-    if (!teacher) throw new NotFoundException('TEACHER_NOT_FOUND');
+    if (!teacher) throw new NotFoundException("TEACHER_NOT_FOUND");
 
     const subjects = await this.subjectRepo.find({
       where: { teacherId },
     });
 
-    const statsWithTeacher = await this.statsService.getStatsForStudentWithTeacher(childId, teacherId);
-    const debt = await this.debtService.getDebtForStudentByTeacher(childId, teacherId);
+    const statsWithTeacher =
+      await this.statsService.getStatsForStudentWithTeacher(childId, teacherId);
+    const debt = await this.debtService.getDebtForStudentByTeacher(
+      childId,
+      teacherId
+    );
 
     return {
       teacherId,
@@ -225,63 +248,115 @@ export class ParentService {
   /**
    * Получает уроки ребёнка за период
    */
-  async getChildLessons(parentId: string, childId: string, from: string, to: string, filters?: LessonFilters) {
+  async getChildLessons(
+    parentId: string,
+    childId: string,
+    from: string,
+    to: string,
+    filters?: LessonFilters
+  ) {
     const relation = await this.relationRepo.findOne({
       where: { parentId, studentId: childId },
     });
-    if (!relation) throw new ForbiddenException('NOT_YOUR_CHILD');
+    if (!relation) throw new ForbiddenException("NOT_YOUR_CHILD");
 
-    const whereClause: any = {
-      studentId: childId,
-      startAt: Between(new Date(from), new Date(to)),
-    };
-    if (filters?.subjectId) whereClause.subjectId = filters.subjectId;
-    if (filters?.teacherId) whereClause.teacherId = filters.teacherId;
-    if (filters?.status) whereClause.status = filters.status;
-
-    const lessons = await this.lessonRepo.find({
-      where: whereClause,
-      relations: ['teacher', 'teacher.user', 'subject'],
-      order: { startAt: 'ASC' },
+    const lessonStudents = await this.lessonStudentRepo.find({
+      where: { studentId: childId },
+      relations: [
+        "lesson",
+        "lesson.teacher",
+        "lesson.teacher.user",
+        "lesson.subject",
+        "lesson.lessonStudents",
+      ],
     });
 
-    return lessons.map((l) => ({
-      id: l.id,
-      teacherId: l.teacherId,
-      subjectId: l.subjectId,
-      startAt: l.startAt.toISOString(),
-      durationMinutes: l.durationMinutes,
-      priceRub: l.priceRub,
-      status: l.status,
-      attendance: l.attendance,
-      paymentStatus: l.paymentStatus,
-      teacherNote: l.teacherNote,
-      lessonReport: l.lessonReport,
-      teacher: {
-        firstName: l.teacher.user.firstName,
-        lastName: l.teacher.user.lastName,
-      },
-      subject: {
-        name: l.subject.name,
-        colorHex: l.subject.colorHex,
-      },
-    }));
+    let lessons = lessonStudents
+      .filter((ls) => ls.lesson)
+      .filter((ls) => {
+        const startAt = new Date(ls.lesson.startAt);
+        return startAt >= new Date(from) && startAt <= new Date(to);
+      });
+
+    if (filters?.subjectId) {
+      lessons = lessons.filter(
+        (ls) => ls.lesson.subjectId === filters.subjectId
+      );
+    }
+    if (filters?.teacherId) {
+      lessons = lessons.filter(
+        (ls) => ls.lesson.teacherId === filters.teacherId
+      );
+    }
+    if (filters?.status) {
+      lessons = lessons.filter((ls) => ls.lesson.status === filters.status);
+    }
+
+    lessons.sort(
+      (a, b) =>
+        new Date(a.lesson.startAt).getTime() -
+        new Date(b.lesson.startAt).getTime()
+    );
+
+    return lessons.map((ls) => {
+      const totalStudentsCount = ls.lesson.lessonStudents?.length || 1;
+      const otherStudentsCount = Math.max(0, totalStudentsCount - 1);
+
+      return {
+        id: ls.lesson.id,
+        teacherId: ls.lesson.teacherId,
+        subjectId: ls.lesson.subjectId,
+        startAt: ls.lesson.startAt.toISOString(),
+        durationMinutes: ls.lesson.durationMinutes,
+        priceRub: ls.priceRub,
+        status: ls.lesson.status,
+        attendance: ls.attendance,
+        paymentStatus: ls.paymentStatus,
+        teacherNote: ls.lesson.teacherNote,
+        lessonReport: ls.lesson.lessonReport,
+        isGroupLesson: totalStudentsCount > 1,
+        totalStudentsCount,
+        otherStudentsCount,
+        teacher: {
+          firstName: ls.lesson.teacher?.user?.firstName,
+          lastName: ls.lesson.teacher?.user?.lastName,
+        },
+        subject: {
+          name: ls.lesson.subject?.name,
+          colorHex: ls.lesson.subject?.colorHex,
+        },
+      };
+    });
   }
 
   /**
    * Получает детали урока ребёнка
    */
-  async getChildLessonDetails(parentId: string, childId: string, lessonId: string) {
+  async getChildLessonDetails(
+    parentId: string,
+    childId: string,
+    lessonId: string
+  ) {
     const relation = await this.relationRepo.findOne({
       where: { parentId, studentId: childId },
     });
-    if (!relation) throw new ForbiddenException('NOT_YOUR_CHILD');
+    if (!relation) throw new ForbiddenException("NOT_YOUR_CHILD");
 
-    const lesson = await this.lessonRepo.findOne({
-      where: { id: lessonId, studentId: childId },
-      relations: ['teacher', 'teacher.user', 'subject'],
+    const lessonStudent = await this.lessonStudentRepo.findOne({
+      where: { lessonId, studentId: childId },
+      relations: [
+        "lesson",
+        "lesson.teacher",
+        "lesson.teacher.user",
+        "lesson.subject",
+        "lesson.lessonStudents",
+      ],
     });
-    if (!lesson) throw new NotFoundException('LESSON_NOT_FOUND');
+    if (!lessonStudent) throw new NotFoundException("LESSON_NOT_FOUND");
+
+    const lesson = lessonStudent.lesson;
+    const totalStudentsCount = lesson.lessonStudents?.length || 1;
+    const otherStudentsCount = Math.max(0, totalStudentsCount - 1);
 
     return {
       id: lesson.id,
@@ -289,20 +364,24 @@ export class ParentService {
       subjectId: lesson.subjectId,
       startAt: lesson.startAt.toISOString(),
       durationMinutes: lesson.durationMinutes,
-      priceRub: lesson.priceRub,
+      priceRub: lessonStudent.priceRub,
       status: lesson.status,
-      attendance: lesson.attendance,
-      paymentStatus: lesson.paymentStatus,
+      attendance: lessonStudent.attendance,
+      paymentStatus: lessonStudent.paymentStatus,
+      rating: lessonStudent.rating,
       teacherNote: lesson.teacherNote,
       lessonReport: lesson.lessonReport,
+      isGroupLesson: totalStudentsCount > 1,
+      totalStudentsCount,
+      otherStudentsCount,
       teacher: {
-        firstName: lesson.teacher.user.firstName,
-        lastName: lesson.teacher.user.lastName,
-        username: lesson.teacher.user.username,
+        firstName: lesson.teacher?.user?.firstName,
+        lastName: lesson.teacher?.user?.lastName,
+        username: lesson.teacher?.user?.username,
       },
       subject: {
-        name: lesson.subject.name,
-        colorHex: lesson.subject.colorHex,
+        name: lesson.subject?.name,
+        colorHex: lesson.subject?.colorHex,
       },
       createdAt: lesson.createdAt.toISOString(),
       updatedAt: lesson.updatedAt.toISOString(),
@@ -320,7 +399,7 @@ export class ParentService {
     const relation = await this.relationRepo.findOne({
       where: { parentId, studentId: childId },
     });
-    if (!relation) throw new ForbiddenException('NOT_YOUR_CHILD');
+    if (!relation) throw new ForbiddenException("NOT_YOUR_CHILD");
 
     return this.statsService.getDetailedStatsForStudent(childId);
   }
@@ -332,7 +411,7 @@ export class ParentService {
     const relation = await this.relationRepo.findOne({
       where: { parentId, studentId: childId },
     });
-    if (!relation) throw new ForbiddenException('NOT_YOUR_CHILD');
+    if (!relation) throw new ForbiddenException("NOT_YOUR_CHILD");
 
     return this.debtService.getDebtByTeachersForStudent(childId);
   }
@@ -347,7 +426,7 @@ export class ParentService {
   async getNotificationSettings(parentId: string) {
     const relations = await this.relationRepo.find({
       where: { parentId },
-      relations: ['student', 'student.user'],
+      relations: ["student", "student.user"],
     });
 
     const childrenMap = new Map<string, any>();
@@ -356,7 +435,9 @@ export class ParentService {
       if (!childrenMap.has(r.studentId)) {
         childrenMap.set(r.studentId, {
           childId: r.studentId,
-          childName: [r.student.user.firstName, r.student.user.lastName].filter(Boolean).join(' '),
+          childName: [r.student.user.firstName, r.student.user.lastName]
+            .filter(Boolean)
+            .join(" "),
           notificationsEnabled: r.notificationsEnabled,
         });
       }
@@ -368,11 +449,14 @@ export class ParentService {
   /**
    * Обновляет настройки уведомлений для нескольких детей
    */
-  async updateNotificationSettings(parentId: string, children: Array<{ childId: string; notificationsEnabled: boolean }>) {
+  async updateNotificationSettings(
+    parentId: string,
+    children: Array<{ childId: string; notificationsEnabled: boolean }>
+  ) {
     for (const child of children) {
       await this.relationRepo.update(
         { parentId, studentId: child.childId },
-        { notificationsEnabled: child.notificationsEnabled },
+        { notificationsEnabled: child.notificationsEnabled }
       );
     }
     return this.getNotificationSettings(parentId);
@@ -381,11 +465,15 @@ export class ParentService {
   /**
    * Обновляет уведомления для конкретного ребёнка
    */
-  async updateChildNotifications(parentId: string, childId: string, notificationsEnabled: boolean) {
+  async updateChildNotifications(
+    parentId: string,
+    childId: string,
+    notificationsEnabled: boolean
+  ) {
     const relation = await this.relationRepo.findOne({
       where: { parentId, studentId: childId },
     });
-    if (!relation) throw new ForbiddenException('NOT_YOUR_CHILD');
+    if (!relation) throw new ForbiddenException("NOT_YOUR_CHILD");
 
     relation.notificationsEnabled = notificationsEnabled;
     await this.relationRepo.save(relation);

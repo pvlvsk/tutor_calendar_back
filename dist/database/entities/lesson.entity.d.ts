@@ -1,0 +1,30 @@
+import { LessonSeries } from "./lesson-series.entity";
+import { TeacherProfile } from "./teacher-profile.entity";
+import { Subject } from "./subject.entity";
+import { LessonStudent } from "./lesson-student.entity";
+export declare class Lesson {
+    id: string;
+    seriesId: string;
+    teacherId: string;
+    subjectId: string;
+    startAt: Date;
+    durationMinutes: number;
+    priceRub: number;
+    isFree: boolean;
+    status: string;
+    cancelledBy: string;
+    cancellationReason: string;
+    rescheduledTo: string;
+    teacherNote: string;
+    teacherNoteUpdatedAt: Date;
+    lessonReport: string;
+    studentNotePrivate: string;
+    studentNoteForTeacher: string;
+    reminderMinutesBefore: number;
+    createdAt: Date;
+    updatedAt: Date;
+    series: LessonSeries;
+    teacher: TeacherProfile;
+    subject: Subject;
+    lessonStudents: LessonStudent[];
+}

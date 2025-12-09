@@ -85,6 +85,15 @@ Entities:
 - Subject
 - Lesson
 - LessonSeries
+- LessonStudent — связь урок-ученик с индивидуальными данными (цена, посещаемость, оценка, оплата)
+- LessonSeriesStudent — связь серия-ученик
 - Invitation
 - TeacherStudentLink
 - ParentStudentRelation
+
+### Групповые уроки
+
+Уроки поддерживают несколько учеников через таблицу `lesson_students`:
+- Каждый ученик имеет индивидуальную цену, посещаемость, оценку и статус оплаты
+- `isGroupLesson` — вычисляемое поле (true если учеников > 1)
+- `isFree` — флаг бесплатного урока (все цены = 0)

@@ -3,18 +3,17 @@
  * Используется в TeacherService и ParentService
  */
 
-import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Lesson } from '../database/entities';
-import { DebtInfo, DetailedDebt, DebtByTeachers } from './types';
-import { calculateDebtInfo } from './utils';
+import { Injectable } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository } from "typeorm";
+import { LessonStudent } from "../database/entities";
+import { DebtInfo, DetailedDebt, DebtByTeachers } from "./types";
 
 @Injectable()
 export class DebtService {
   constructor(
-    @InjectRepository(Lesson)
-    private lessonRepo: Repository<Lesson>,
+    @InjectRepository(LessonStudent)
+    private lessonStudentRepo: Repository<LessonStudent>
   ) {}
 
   /**
@@ -22,17 +21,22 @@ export class DebtService {
    */
   async getStudentDebtForTeacher(
     teacherId: string,
-    studentId: string,
+    studentId: string
   ): Promise<DebtInfo> {
-    const unpaidLessons = await this.lessonRepo.find({
+    const unpaidRecords = await this.lessonStudentRepo.find({
       where: {
-        teacherId,
         studentId,
-        status: 'done',
-        paymentStatus: 'unpaid',
+        attendance: "attended",
+        paymentStatus: "unpaid",
       },
+      relations: ["lesson"],
     });
-    return calculateDebtInfo(unpaidLessons);
+
+    const filtered = unpaidRecords.filter(
+      (r) => r.lesson?.teacherId === teacherId && r.lesson?.status === "done"
+    );
+
+    return this.calculateDebtFromRecords(filtered);
   }
 
   /**
@@ -40,23 +44,30 @@ export class DebtService {
    */
   async getStudentDebtDetailsForTeacher(
     teacherId: string,
-    studentId: string,
+    studentId: string
   ): Promise<DetailedDebt> {
-    const unpaidLessons = await this.lessonRepo.find({
-      where: { teacherId, studentId, status: 'done', paymentStatus: 'unpaid' },
-      relations: ['subject'],
-      order: { startAt: 'ASC' },
+    const unpaidRecords = await this.lessonStudentRepo.find({
+      where: {
+        studentId,
+        attendance: "attended",
+        paymentStatus: "unpaid",
+      },
+      relations: ["lesson", "lesson.subject"],
     });
 
-    const baseDebt = calculateDebtInfo(unpaidLessons);
+    const filtered = unpaidRecords.filter(
+      (r) => r.lesson?.teacherId === teacherId && r.lesson?.status === "done"
+    );
+
+    const baseDebt = this.calculateDebtFromRecords(filtered);
 
     return {
       ...baseDebt,
-      lessons: unpaidLessons.map(l => ({
-        lessonId: l.id,
-        startAt: l.startAt.toISOString(),
-        priceRub: l.priceRub,
-        subjectName: l.subject.name,
+      lessons: filtered.map((r) => ({
+        lessonId: r.lesson.id,
+        startAt: r.lesson.startAt.toISOString(),
+        priceRub: r.priceRub,
+        subjectName: r.lesson.subject?.name || "",
       })),
     };
   }
@@ -65,10 +76,17 @@ export class DebtService {
    * Получает общий долг ученика (для родителя)
    */
   async getTotalDebtForStudent(studentId: string): Promise<DebtInfo> {
-    const unpaidLessons = await this.lessonRepo.find({
-      where: { studentId, status: 'done', paymentStatus: 'unpaid' },
+    const unpaidRecords = await this.lessonStudentRepo.find({
+      where: {
+        studentId,
+        attendance: "attended",
+        paymentStatus: "unpaid",
+      },
+      relations: ["lesson"],
     });
-    return calculateDebtInfo(unpaidLessons);
+
+    const filtered = unpaidRecords.filter((r) => r.lesson?.status === "done");
+    return this.calculateDebtFromRecords(filtered);
   }
 
   /**
@@ -76,45 +94,54 @@ export class DebtService {
    */
   async getDebtForStudentByTeacher(
     studentId: string,
-    teacherId: string,
+    teacherId: string
   ): Promise<DebtInfo> {
-    const unpaidLessons = await this.lessonRepo.find({
-      where: { studentId, teacherId, status: 'done', paymentStatus: 'unpaid' },
-    });
-    return calculateDebtInfo(unpaidLessons);
+    return this.getStudentDebtForTeacher(teacherId, studentId);
   }
 
   /**
    * Получает долг ученика с разбивкой по учителям (для родителя)
    */
-  async getDebtByTeachersForStudent(studentId: string): Promise<DebtByTeachers> {
-    const unpaidLessons = await this.lessonRepo.find({
-      where: { studentId, status: 'done', paymentStatus: 'unpaid' },
-      relations: ['subject', 'teacher'],
-      order: { startAt: 'ASC' },
+  async getDebtByTeachersForStudent(
+    studentId: string
+  ): Promise<DebtByTeachers> {
+    const unpaidRecords = await this.lessonStudentRepo.find({
+      where: {
+        studentId,
+        attendance: "attended",
+        paymentStatus: "unpaid",
+      },
+      relations: ["lesson", "lesson.subject", "lesson.teacher"],
     });
 
-    const totalDebt = calculateDebtInfo(unpaidLessons);
+    const filtered = unpaidRecords.filter((r) => r.lesson?.status === "done");
 
-    const byTeacher = new Map<string, {
-      teacherId: string;
-      teacherName: string;
-      hasDebt: boolean;
-      unpaidLessonsCount: number;
-      unpaidAmountRub: number;
-      lessons: Array<{
-        lessonId: string;
-        startAt: string;
-        priceRub: number;
-        subjectName: string;
-      }>;
-    }>();
+    const totalDebt = this.calculateDebtFromRecords(filtered);
 
-    for (const lesson of unpaidLessons) {
-      if (!byTeacher.has(lesson.teacherId)) {
-        byTeacher.set(lesson.teacherId, {
-          teacherId: lesson.teacherId,
-          teacherName: lesson.teacher.displayName || '',
+    const byTeacher = new Map<
+      string,
+      {
+        teacherId: string;
+        teacherName: string;
+        hasDebt: boolean;
+        unpaidLessonsCount: number;
+        unpaidAmountRub: number;
+        lessons: Array<{
+          lessonId: string;
+          startAt: string;
+          priceRub: number;
+          subjectName: string;
+        }>;
+      }
+    >();
+
+    for (const record of filtered) {
+      const teacherId = record.lesson.teacherId;
+
+      if (!byTeacher.has(teacherId)) {
+        byTeacher.set(teacherId, {
+          teacherId,
+          teacherName: record.lesson.teacher?.displayName || "",
           hasDebt: true,
           unpaidLessonsCount: 0,
           unpaidAmountRub: 0,
@@ -122,14 +149,14 @@ export class DebtService {
         });
       }
 
-      const t = byTeacher.get(lesson.teacherId)!;
+      const t = byTeacher.get(teacherId)!;
       t.unpaidLessonsCount++;
-      t.unpaidAmountRub += lesson.priceRub;
+      t.unpaidAmountRub += record.priceRub;
       t.lessons.push({
-        lessonId: lesson.id,
-        startAt: lesson.startAt.toISOString(),
-        priceRub: lesson.priceRub,
-        subjectName: lesson.subject.name,
+        lessonId: record.lesson.id,
+        startAt: record.lesson.startAt.toISOString(),
+        priceRub: record.priceRub,
+        subjectName: record.lesson.subject?.name || "",
       });
     }
 
@@ -138,5 +165,18 @@ export class DebtService {
       byTeacher: Array.from(byTeacher.values()),
     };
   }
-}
 
+  private calculateDebtFromRecords(records: LessonStudent[]): DebtInfo {
+    if (records.length === 0) {
+      return { hasDebt: false, unpaidLessonsCount: 0, unpaidAmountRub: 0 };
+    }
+
+    const unpaidAmountRub = records.reduce((sum, r) => sum + r.priceRub, 0);
+
+    return {
+      hasDebt: true,
+      unpaidLessonsCount: records.length,
+      unpaidAmountRub,
+    };
+  }
+}

@@ -1,14 +1,15 @@
-import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { StudentController } from './student.controller';
-import { StudentService } from './student.service';
+import { Module } from "@nestjs/common";
+import { TypeOrmModule } from "@nestjs/typeorm";
+import { StudentController } from "./student.controller";
+import { StudentService } from "./student.service";
 import {
   StudentProfile,
   TeacherStudentLink,
   Lesson,
+  LessonStudent,
   Subject,
   StudentNotificationSettings,
-} from '../database/entities';
+} from "../database/entities";
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import {
       StudentProfile,
       TeacherStudentLink,
       Lesson,
+      LessonStudent,
       Subject,
       StudentNotificationSettings,
     ]),

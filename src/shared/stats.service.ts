@@ -3,10 +3,10 @@
  * Используется в TeacherService, StudentService и ParentService
  */
 
-import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, MoreThan } from 'typeorm';
-import { Lesson } from '../database/entities';
+import { Injectable } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository } from "typeorm";
+import { Lesson, LessonStudent } from "../database/entities";
 import {
   AttendanceStats,
   DetailedStats,
@@ -15,21 +15,16 @@ import {
   StudentCardStats,
   StudentDetailedStatsForTeacher,
   DetailedDebt,
-} from './types';
-import {
-  calculateAttendanceRate,
-  calculateAttendanceStats,
-  calculateStatsBySubject,
-  calculateStatsByTeacher,
-  calculateDebtInfo,
-  getDayOfWeekRu,
-} from './utils';
+} from "./types";
+import { getDayOfWeekRu } from "./utils";
 
 @Injectable()
 export class StatsService {
   constructor(
     @InjectRepository(Lesson)
     private lessonRepo: Repository<Lesson>,
+    @InjectRepository(LessonStudent)
+    private lessonStudentRepo: Repository<LessonStudent>
   ) {}
 
   /**
@@ -37,12 +32,18 @@ export class StatsService {
    */
   async getStatsForStudentWithTeacher(
     studentId: string,
-    teacherId: string,
+    teacherId: string
   ): Promise<AttendanceStats> {
-    const lessons = await this.lessonRepo.find({
-      where: { studentId, teacherId },
+    const records = await this.lessonStudentRepo.find({
+      where: { studentId },
+      relations: ["lesson"],
     });
-    return calculateAttendanceStats(lessons);
+
+    const filtered = records.filter(
+      (r) => r.lesson?.teacherId === teacherId && r.lesson?.status === "done"
+    );
+
+    return this.calculateAttendanceFromRecords(filtered);
   }
 
   /**
@@ -50,27 +51,31 @@ export class StatsService {
    */
   async getStudentStatsForTeacher(
     teacherId: string,
-    studentId: string,
+    studentId: string
   ): Promise<AttendanceStats> {
-    const lessons = await this.lessonRepo.find({
-      where: { teacherId, studentId },
-    });
-    return calculateAttendanceStats(lessons);
+    return this.getStatsForStudentWithTeacher(studentId, teacherId);
   }
 
   /**
    * Рассчитывает полную статистику ученика по всем учителям
    */
   async getDetailedStatsForStudent(studentId: string): Promise<DetailedStats> {
-    const lessons = await this.lessonRepo.find({
+    const records = await this.lessonStudentRepo.find({
       where: { studentId },
-      relations: ['subject', 'teacher', 'teacher.user'],
+      relations: [
+        "lesson",
+        "lesson.subject",
+        "lesson.teacher",
+        "lesson.teacher.user",
+      ],
     });
 
+    const doneRecords = records.filter((r) => r.lesson?.status === "done");
+
     return {
-      total: calculateAttendanceStats(lessons),
-      bySubject: calculateStatsBySubject(lessons),
-      byTeacher: calculateStatsByTeacher(lessons),
+      total: this.calculateAttendanceFromRecords(doneRecords),
+      bySubject: this.calculateStatsBySubject(doneRecords),
+      byTeacher: this.calculateStatsByTeacher(doneRecords),
       currentStreak: 0,
       maxStreak: 0,
     };
@@ -80,89 +85,132 @@ export class StatsService {
    * Рассчитывает статистику по предметам для ученика
    */
   async getSubjectStatsForStudent(studentId: string): Promise<SubjectStats[]> {
-    const lessons = await this.lessonRepo.find({
+    const records = await this.lessonStudentRepo.find({
       where: { studentId },
-      relations: ['subject'],
+      relations: ["lesson", "lesson.subject"],
     });
-    return calculateStatsBySubject(lessons);
+    return this.calculateStatsBySubject(records);
   }
 
   /**
    * Рассчитывает статистику по учителям для ученика
    */
   async getTeacherStatsForStudent(studentId: string): Promise<TeacherStats[]> {
-    const lessons = await this.lessonRepo.find({
+    const records = await this.lessonStudentRepo.find({
       where: { studentId },
-      relations: ['teacher'],
+      relations: ["lesson", "lesson.teacher"],
     });
-    return calculateStatsByTeacher(lessons);
+    return this.calculateStatsByTeacher(records);
   }
 
   /**
    * Краткая статистика ученика для карточки (для учителя)
    */
-  async getStudentCardStats(teacherId: string, studentId: string): Promise<StudentCardStats> {
-    const lessons = await this.lessonRepo.find({
-      where: { teacherId, studentId },
-      relations: ['subject'],
-      order: { startAt: 'ASC' },
+  async getStudentCardStats(
+    teacherId: string,
+    studentId: string
+  ): Promise<StudentCardStats> {
+    const records = await this.lessonStudentRepo.find({
+      where: { studentId },
+      relations: ["lesson", "lesson.subject"],
     });
 
-    // Долг
-    const unpaidLessons = lessons.filter(l => l.status === 'done' && l.paymentStatus === 'unpaid');
-    const debt = calculateDebtInfo(unpaidLessons);
+    const teacherRecords = records.filter(
+      (r) => r.lesson?.teacherId === teacherId
+    );
+    const unpaidRecords = teacherRecords.filter(
+      (r) =>
+        r.lesson?.status === "done" &&
+        r.attendance === "attended" &&
+        r.paymentStatus === "unpaid"
+    );
 
-    // Следующий урок
+    const debt = {
+      hasDebt: unpaidRecords.length > 0,
+      unpaidLessonsCount: unpaidRecords.length,
+      unpaidAmountRub: unpaidRecords.reduce((sum, r) => sum + r.priceRub, 0),
+    };
+
     const now = new Date();
-    const nextLesson = lessons.find(l => l.status === 'planned' && new Date(l.startAt) > now);
+    const nextLessonRecord = teacherRecords
+      .filter(
+        (r) =>
+          r.lesson?.status === "planned" && new Date(r.lesson.startAt) > now
+      )
+      .sort(
+        (a, b) =>
+          new Date(a.lesson.startAt).getTime() -
+          new Date(b.lesson.startAt).getTime()
+      )[0];
 
     return {
       debt,
-      nextLesson: nextLesson ? {
-        date: nextLesson.startAt.toISOString(),
-        dayOfWeek: getDayOfWeekRu(new Date(nextLesson.startAt)),
-        subjectName: nextLesson.subject?.name || '',
-      } : null,
+      nextLesson: nextLessonRecord
+        ? {
+            date: nextLessonRecord.lesson.startAt.toISOString(),
+            dayOfWeek: getDayOfWeekRu(
+              new Date(nextLessonRecord.lesson.startAt)
+            ),
+            subjectName: nextLessonRecord.lesson.subject?.name || "",
+          }
+        : null,
     };
   }
 
   /**
    * Детальная статистика ученика (для учителя)
    */
-  async getStudentDetailedStats(teacherId: string, studentId: string): Promise<StudentDetailedStatsForTeacher> {
-    const lessons = await this.lessonRepo.find({
-      where: { teacherId, studentId },
-      relations: ['subject'],
-      order: { startAt: 'DESC' },
+  async getStudentDetailedStats(
+    teacherId: string,
+    studentId: string
+  ): Promise<StudentDetailedStatsForTeacher> {
+    const records = await this.lessonStudentRepo.find({
+      where: { studentId },
+      relations: ["lesson", "lesson.subject"],
     });
 
-    // Долг с деталями
-    const unpaidLessons = lessons.filter(l => l.status === 'done' && l.paymentStatus === 'unpaid');
+    const teacherRecords = records.filter(
+      (r) => r.lesson?.teacherId === teacherId
+    );
+
+    const unpaidRecords = teacherRecords.filter(
+      (r) =>
+        r.lesson?.status === "done" &&
+        r.attendance === "attended" &&
+        r.paymentStatus === "unpaid"
+    );
+
     const debt: DetailedDebt = {
-      ...calculateDebtInfo(unpaidLessons),
-      lessons: unpaidLessons.map(l => ({
-        lessonId: l.id,
-        startAt: l.startAt.toISOString(),
-        priceRub: l.priceRub,
-        subjectName: l.subject?.name || '',
+      hasDebt: unpaidRecords.length > 0,
+      unpaidLessonsCount: unpaidRecords.length,
+      unpaidAmountRub: unpaidRecords.reduce((sum, r) => sum + r.priceRub, 0),
+      lessons: unpaidRecords.map((r) => ({
+        lessonId: r.lesson.id,
+        startAt: r.lesson.startAt.toISOString(),
+        priceRub: r.priceRub,
+        subjectName: r.lesson.subject?.name || "",
       })),
     };
 
-    // Посещаемость (включает отмены)
-    const attendance = calculateAttendanceStats(lessons);
+    const doneRecords = teacherRecords.filter(
+      (r) => r.lesson?.status === "done"
+    );
+    const attendance = this.calculateAttendanceFromRecords(doneRecords);
+    const bySubject = this.calculateStatsBySubject(doneRecords);
 
-    // По предметам
-    const bySubject = calculateStatsBySubject(lessons);
-
-    // Последние пропуски
-    const missedLessons = lessons
-      .filter(l => l.status === 'done' && l.attendance === 'missed')
+    const missedRecords = doneRecords
+      .filter((r) => r.attendance === "missed")
+      .sort(
+        (a, b) =>
+          new Date(b.lesson.startAt).getTime() -
+          new Date(a.lesson.startAt).getTime()
+      )
       .slice(0, 10);
 
-    const recentMissedLessons = missedLessons.map(l => ({
-      lessonId: l.id,
-      startAt: l.startAt.toISOString(),
-      subjectName: l.subject?.name || '',
+    const recentMissedLessons = missedRecords.map((r) => ({
+      lessonId: r.lesson.id,
+      startAt: r.lesson.startAt.toISOString(),
+      subjectName: r.lesson.subject?.name || "",
     }));
 
     return {
@@ -173,33 +221,85 @@ export class StatsService {
     };
   }
 
-  /**
-   * Рассчитывает текущий и максимальный streak посещений
-   */
-  calculateStreak(lessons: Lesson[]): { current: number; max: number } {
-    const doneLessons = lessons
-      .filter(l => l.status === 'done')
-      .sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime());
+  private calculateAttendanceFromRecords(
+    records: LessonStudent[]
+  ): AttendanceStats {
+    const total = records.length;
+    const attended = records.filter((r) => r.attendance === "attended").length;
+    const missed = records.filter((r) => r.attendance === "missed").length;
+    const cancelled = records.filter(
+      (r) => r.lesson?.status === "cancelled"
+    ).length;
 
-    if (doneLessons.length === 0) return { current: 0, max: 0 };
+    const rate = total > 0 ? Math.round((attended / total) * 100) : 0;
 
-    let current = 0;
-    let max = 0;
-    let streak = 0;
-    let foundMissed = false;
+    return {
+      totalLessonsPlanned: total,
+      totalLessonsAttended: attended,
+      totalLessonsMissed: missed,
+      cancelledByStudent: cancelled,
+      cancelledByTeacher: 0,
+      cancelledByIllness: 0,
+      attendanceRate: rate,
+    };
+  }
 
-    for (const lesson of doneLessons) {
-      if (lesson.attendance === 'attended') {
-        streak++;
-        if (!foundMissed) current = streak;
-        max = Math.max(max, streak);
-      } else {
-        foundMissed = true;
-        streak = 0;
+  private calculateStatsBySubject(records: LessonStudent[]): SubjectStats[] {
+    const bySubject = new Map<
+      string,
+      { name: string; attended: number; total: number }
+    >();
+
+    for (const r of records) {
+      const subjectId = r.lesson?.subjectId;
+      const subjectName = r.lesson?.subject?.name || "";
+      if (!subjectId) continue;
+
+      if (!bySubject.has(subjectId)) {
+        bySubject.set(subjectId, { name: subjectName, attended: 0, total: 0 });
       }
+      const stats = bySubject.get(subjectId)!;
+      stats.total++;
+      if (r.attendance === "attended") stats.attended++;
     }
 
-    return { current, max };
+    return Array.from(bySubject.entries()).map(([id, s]) => ({
+      subjectId: id,
+      subjectName: s.name,
+      colorHex: "#888888",
+      lessonsPlanned: s.total,
+      lessonsAttended: s.attended,
+      attendanceRate:
+        s.total > 0 ? Math.round((s.attended / s.total) * 100) : 0,
+    }));
+  }
+
+  private calculateStatsByTeacher(records: LessonStudent[]): TeacherStats[] {
+    const byTeacher = new Map<
+      string,
+      { name: string; attended: number; total: number }
+    >();
+
+    for (const r of records) {
+      const teacherId = r.lesson?.teacherId;
+      const teacherName = r.lesson?.teacher?.displayName || "";
+      if (!teacherId) continue;
+
+      if (!byTeacher.has(teacherId)) {
+        byTeacher.set(teacherId, { name: teacherName, attended: 0, total: 0 });
+      }
+      const stats = byTeacher.get(teacherId)!;
+      stats.total++;
+      if (r.attendance === "attended") stats.attended++;
+    }
+
+    return Array.from(byTeacher.entries()).map(([id, s]) => ({
+      teacherId: id,
+      teacherName: s.name,
+      lessonsPlanned: s.total,
+      lessonsAttended: s.attended,
+      attendanceRate:
+        s.total > 0 ? Math.round((s.attended / s.total) * 100) : 0,
+    }));
   }
 }
-

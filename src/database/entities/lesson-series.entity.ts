@@ -1,19 +1,25 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, OneToMany, JoinColumn } from 'typeorm';
-import { TeacherProfile } from './teacher-profile.entity';
-import { StudentProfile } from './student-profile.entity';
-import { Subject } from './subject.entity';
-import { Lesson } from './lesson.entity';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  OneToMany,
+  JoinColumn,
+} from "typeorm";
+import { TeacherProfile } from "./teacher-profile.entity";
+import { Subject } from "./subject.entity";
+import { Lesson } from "./lesson.entity";
+import { LessonSeriesStudent } from "./lesson-series-student.entity";
 
-@Entity('lesson_series')
+@Entity("lesson_series")
 export class LessonSeries {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn("uuid")
   id: string;
 
   @Column()
   teacherId: string;
-
-  @Column({ nullable: true })
-  studentId: string;
 
   @Column()
   subjectId: string;
@@ -39,24 +45,30 @@ export class LessonSeries {
   @Column()
   priceRub: number;
 
+  @Column({ default: false })
+  isFree: boolean;
+
   @CreateDateColumn()
   createdAt: Date;
 
   @UpdateDateColumn()
   updatedAt: Date;
 
-  @ManyToOne(() => TeacherProfile, (teacher) => teacher.lessonSeries, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'teacherId' })
+  @ManyToOne(() => TeacherProfile, (teacher) => teacher.lessonSeries, {
+    onDelete: "CASCADE",
+  })
+  @JoinColumn({ name: "teacherId" })
   teacher: TeacherProfile;
 
-  @ManyToOne(() => StudentProfile, (student) => student.lessonSeries, { onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'studentId' })
-  student: StudentProfile;
-
-  @ManyToOne(() => Subject, (subject) => subject.lessonSeries, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'subjectId' })
+  @ManyToOne(() => Subject, (subject) => subject.lessonSeries, {
+    onDelete: "CASCADE",
+  })
+  @JoinColumn({ name: "subjectId" })
   subject: Subject;
 
   @OneToMany(() => Lesson, (lesson) => lesson.series)
   lessons: Lesson[];
+
+  @OneToMany(() => LessonSeriesStudent, (ss) => ss.series)
+  seriesStudents: LessonSeriesStudent[];
 }

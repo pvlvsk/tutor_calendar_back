@@ -1,7 +1,7 @@
-import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { TeacherController } from './teacher.controller';
-import { TeacherService } from './teacher.service';
+import { Module } from "@nestjs/common";
+import { TypeOrmModule } from "@nestjs/typeorm";
+import { TeacherController } from "./teacher.controller";
+import { TeacherService } from "./teacher.service";
 import {
   TeacherProfile,
   StudentProfile,
@@ -9,9 +9,11 @@ import {
   TeacherStudentLink,
   Lesson,
   LessonSeries,
+  LessonStudent,
+  LessonSeriesStudent,
   Invitation,
   ParentStudentRelation,
-} from '../database/entities';
+} from "../database/entities";
 
 @Module({
   imports: [
@@ -22,6 +24,8 @@ import {
       TeacherStudentLink,
       Lesson,
       LessonSeries,
+      LessonStudent,
+      LessonSeriesStudent,
       Invitation,
       ParentStudentRelation,
     ]),

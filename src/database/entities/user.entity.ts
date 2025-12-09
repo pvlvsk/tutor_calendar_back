@@ -20,6 +20,12 @@ export class User {
   @Column({ nullable: true })
   username: string;
 
+  @Column({ nullable: true })
+  city: string;
+
+  @Column({ nullable: true })
+  timezone: string;
+
   @Column({ default: false })
   isBetaTester: boolean;
 

@@ -1,12 +1,21 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
-import { LessonSeries } from './lesson-series.entity';
-import { TeacherProfile } from './teacher-profile.entity';
-import { StudentProfile } from './student-profile.entity';
-import { Subject } from './subject.entity';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  OneToMany,
+  JoinColumn,
+} from "typeorm";
+import { LessonSeries } from "./lesson-series.entity";
+import { TeacherProfile } from "./teacher-profile.entity";
+import { Subject } from "./subject.entity";
+import { LessonStudent } from "./lesson-student.entity";
 
-@Entity('lessons')
+@Entity("lessons")
 export class Lesson {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn("uuid")
   id: string;
 
   @Column({ nullable: true })
@@ -14,9 +23,6 @@ export class Lesson {
 
   @Column()
   teacherId: string;
-
-  @Column({ nullable: true })
-  studentId: string;
 
   @Column()
   subjectId: string;
@@ -30,14 +36,11 @@ export class Lesson {
   @Column()
   priceRub: number;
 
-  @Column({ default: 'planned' })
+  @Column({ default: false })
+  isFree: boolean;
+
+  @Column({ default: "planned" })
   status: string;
-
-  @Column({ default: 'unknown' })
-  attendance: string;
-
-  @Column({ default: 'unpaid' })
-  paymentStatus: string;
 
   @Column({ nullable: true })
   cancelledBy: string;
@@ -72,19 +75,24 @@ export class Lesson {
   @UpdateDateColumn()
   updatedAt: Date;
 
-  @ManyToOne(() => LessonSeries, (series) => series.lessons, { onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'seriesId' })
+  @ManyToOne(() => LessonSeries, (series) => series.lessons, {
+    onDelete: "SET NULL",
+  })
+  @JoinColumn({ name: "seriesId" })
   series: LessonSeries;
 
-  @ManyToOne(() => TeacherProfile, (teacher) => teacher.lessons, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'teacherId' })
+  @ManyToOne(() => TeacherProfile, (teacher) => teacher.lessons, {
+    onDelete: "CASCADE",
+  })
+  @JoinColumn({ name: "teacherId" })
   teacher: TeacherProfile;
 
-  @ManyToOne(() => StudentProfile, (student) => student.lessons, { onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'studentId' })
-  student: StudentProfile;
-
-  @ManyToOne(() => Subject, (subject) => subject.lessons, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'subjectId' })
+  @ManyToOne(() => Subject, (subject) => subject.lessons, {
+    onDelete: "CASCADE",
+  })
+  @JoinColumn({ name: "subjectId" })
   subject: Subject;
+
+  @OneToMany(() => LessonStudent, (ls) => ls.lesson)
+  lessonStudents: LessonStudent[];
 }

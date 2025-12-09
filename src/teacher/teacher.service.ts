@@ -3,10 +3,15 @@
  * Управление профилем, учениками, предметами, уроками
  */
 
-import { Injectable, NotFoundException, ConflictException, ForbiddenException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, MoreThanOrEqual, Between } from 'typeorm';
-import { randomBytes } from 'crypto';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  ForbiddenException,
+} from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository, MoreThanOrEqual, Between } from "typeorm";
+import { randomBytes } from "crypto";
 import {
   TeacherProfile,
   StudentProfile,
@@ -14,12 +19,14 @@ import {
   TeacherStudentLink,
   Lesson,
   LessonSeries,
+  LessonStudent,
+  LessonSeriesStudent,
   Invitation,
   ParentStudentRelation,
-} from '../database/entities';
-import { StatsService, DebtService } from '../shared';
-import { LessonFilters } from '../shared/types';
-import { generateInviteUrl, generateFallbackUrl } from '../shared/utils';
+} from "../database/entities";
+import { StatsService, DebtService } from "../shared";
+import { LessonFilters } from "../shared/types";
+import { generateInviteUrl, generateFallbackUrl } from "../shared/utils";
 
 @Injectable()
 export class TeacherService {
@@ -34,6 +41,10 @@ export class TeacherService {
     private lessonRepo: Repository<Lesson>,
     @InjectRepository(LessonSeries)
     private seriesRepo: Repository<LessonSeries>,
+    @InjectRepository(LessonStudent)
+    private lessonStudentRepo: Repository<LessonStudent>,
+    @InjectRepository(LessonSeriesStudent)
+    private seriesStudentRepo: Repository<LessonSeriesStudent>,
     @InjectRepository(Invitation)
     private invitationRepo: Repository<Invitation>,
     @InjectRepository(ParentStudentRelation)
@@ -41,7 +52,7 @@ export class TeacherService {
     @InjectRepository(StudentProfile)
     private studentProfileRepo: Repository<StudentProfile>,
     private statsService: StatsService,
-    private debtService: DebtService,
+    private debtService: DebtService
   ) {}
 
   // ============================================
@@ -52,14 +63,19 @@ export class TeacherService {
    * Получает профиль учителя по ID
    */
   async getProfile(teacherId: string) {
-    const profile = await this.teacherProfileRepo.findOne({ where: { id: teacherId } });
-    if (!profile) throw new NotFoundException('TEACHER_NOT_FOUND');
+    const profile = await this.teacherProfileRepo.findOne({
+      where: { id: teacherId },
+      relations: ["user"],
+    });
+    if (!profile) throw new NotFoundException("TEACHER_NOT_FOUND");
     return {
       id: profile.id,
       displayName: profile.displayName,
       bio: profile.bio,
       referralCode: profile.referralCode,
       inviteUrl: generateInviteUrl(profile.referralCode),
+      city: profile.user?.city,
+      timezone: profile.user?.timezone,
     };
   }
 
@@ -67,8 +83,10 @@ export class TeacherService {
    * Получает постоянную ссылку для приглашения учеников
    */
   async getInviteLink(teacherId: string) {
-    const profile = await this.teacherProfileRepo.findOne({ where: { id: teacherId } });
-    if (!profile) throw new NotFoundException('TEACHER_NOT_FOUND');
+    const profile = await this.teacherProfileRepo.findOne({
+      where: { id: teacherId },
+    });
+    if (!profile) throw new NotFoundException("TEACHER_NOT_FOUND");
 
     return {
       referralCode: profile.referralCode,
@@ -80,7 +98,10 @@ export class TeacherService {
   /**
    * Обновляет профиль учителя
    */
-  async updateProfile(teacherId: string, data: { displayName?: string; bio?: string }) {
+  async updateProfile(
+    teacherId: string,
+    data: { displayName?: string; bio?: string }
+  ) {
     await this.teacherProfileRepo.update({ id: teacherId }, data);
     return this.getProfile(teacherId);
   }
@@ -95,68 +116,108 @@ export class TeacherService {
   async getSubjects(teacherId: string) {
     return this.subjectRepo.find({
       where: { teacherId },
-      order: { createdAt: 'ASC' },
+      order: { createdAt: "ASC" },
     });
   }
 
   /**
    * Создаёт новый предмет
    */
-  async createSubject(teacherId: string, data: { name: string; code?: string; colorHex: string }) {
+  async createSubject(
+    teacherId: string,
+    data: { name: string; code?: string; colorHex: string }
+  ) {
     // Проверка на дубликат названия
     const existingByName = await this.subjectRepo.findOne({
       where: { teacherId, name: data.name },
     });
-    if (existingByName) throw new ConflictException('SUBJECT_NAME_EXISTS');
+    if (existingByName) throw new ConflictException("SUBJECT_NAME_EXISTS");
 
     // Автогенерация code из name если не передан
     const code = data.code || this.generateCode(data.name);
-    
+
     const existingByCode = await this.subjectRepo.findOne({
       where: { teacherId, code },
     });
-    if (existingByCode) throw new ConflictException('SUBJECT_CODE_EXISTS');
+    if (existingByCode) throw new ConflictException("SUBJECT_CODE_EXISTS");
 
-    const subject = this.subjectRepo.create({ name: data.name, code, colorHex: data.colorHex, teacherId });
+    const subject = this.subjectRepo.create({
+      name: data.name,
+      code,
+      colorHex: data.colorHex,
+      teacherId,
+    });
     return this.subjectRepo.save(subject);
   }
 
   private generateCode(name: string): string {
     // Транслитерация и очистка
     const translitMap: Record<string, string> = {
-      'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'e',
-      'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
-      'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
-      'ф': 'f', 'х': 'h', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'sch', 'ъ': '',
-      'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
+      а: "a",
+      б: "b",
+      в: "v",
+      г: "g",
+      д: "d",
+      е: "e",
+      ё: "e",
+      ж: "zh",
+      з: "z",
+      и: "i",
+      й: "y",
+      к: "k",
+      л: "l",
+      м: "m",
+      н: "n",
+      о: "o",
+      п: "p",
+      р: "r",
+      с: "s",
+      т: "t",
+      у: "u",
+      ф: "f",
+      х: "h",
+      ц: "ts",
+      ч: "ch",
+      ш: "sh",
+      щ: "sch",
+      ъ: "",
+      ы: "y",
+      ь: "",
+      э: "e",
+      ю: "yu",
+      я: "ya",
     };
-    
+
     return name
       .toLowerCase()
-      .split('')
-      .map(char => translitMap[char] || char)
-      .join('')
-      .replace(/[^a-z0-9]/g, '_')
-      .replace(/_+/g, '_')
-      .replace(/^_|_$/g, '')
+      .split("")
+      .map((char) => translitMap[char] || char)
+      .join("")
+      .replace(/[^a-z0-9]/g, "_")
+      .replace(/_+/g, "_")
+      .replace(/^_|_$/g, "")
       .substring(0, 50);
   }
 
   /**
    * Обновляет предмет
    */
-  async updateSubject(teacherId: string, subjectId: string, data: { name?: string; colorHex?: string }) {
+  async updateSubject(
+    teacherId: string,
+    subjectId: string,
+    data: { name?: string; colorHex?: string }
+  ) {
     const subject = await this.subjectRepo.findOne({
       where: { id: subjectId, teacherId },
     });
-    if (!subject) throw new NotFoundException('SUBJECT_NOT_FOUND');
+    if (!subject) throw new NotFoundException("SUBJECT_NOT_FOUND");
 
     // Проверка на дубликат названия (если меняем name)
     if (data.name && data.name !== subject.name) {
       const existingByName = await this.subjectRepo.findOne({
         where: { teacherId, name: data.name },
       });
-      if (existingByName) throw new ConflictException('SUBJECT_NAME_EXISTS');
+      if (existingByName) throw new ConflictException("SUBJECT_NAME_EXISTS");
     }
 
     await this.subjectRepo.update({ id: subjectId }, data);
@@ -170,10 +231,10 @@ export class TeacherService {
     const subject = await this.subjectRepo.findOne({
       where: { id: subjectId, teacherId },
     });
-    if (!subject) throw new NotFoundException('SUBJECT_NOT_FOUND');
+    if (!subject) throw new NotFoundException("SUBJECT_NOT_FOUND");
 
     const lessonsCount = await this.lessonRepo.count({ where: { subjectId } });
-    if (lessonsCount > 0) throw new ConflictException('SUBJECT_HAS_LESSONS');
+    if (lessonsCount > 0) throw new ConflictException("SUBJECT_HAS_LESSONS");
 
     await this.subjectRepo.delete({ id: subjectId });
     return { success: true };
@@ -189,26 +250,35 @@ export class TeacherService {
   async getStudents(teacherId: string) {
     const links = await this.linkRepo.find({
       where: { teacherId },
-      relations: ['student', 'student.user'],
+      relations: ["student", "student.user"],
     });
 
-    // Get all subjects for this teacher
     const allSubjects = await this.subjectRepo.find({ where: { teacherId } });
 
     const students = [];
     for (const link of links) {
-      const stats = await this.statsService.getStudentStatsForTeacher(teacherId, link.studentId);
-      const debt = await this.debtService.getStudentDebtForTeacher(teacherId, link.studentId);
+      const stats = await this.statsService.getStudentStatsForTeacher(
+        teacherId,
+        link.studentId
+      );
+      const debt = await this.debtService.getStudentDebtForTeacher(
+        teacherId,
+        link.studentId
+      );
 
-      // Get unique subjects from student's lessons with this teacher
-      const lessons = await this.lessonRepo.find({
-        where: { teacherId, studentId: link.studentId },
-        select: ['subjectId'],
+      const lessonStudentRecords = await this.lessonStudentRepo.find({
+        where: { studentId: link.studentId },
+        relations: ["lesson"],
       });
-      const uniqueSubjectIds = [...new Set(lessons.map(l => l.subjectId))];
+      const teacherLessons = lessonStudentRecords.filter(
+        (ls) => ls.lesson?.teacherId === teacherId
+      );
+      const uniqueSubjectIds = [
+        ...new Set(teacherLessons.map((ls) => ls.lesson?.subjectId)),
+      ];
       const subjects = allSubjects
-        .filter(s => uniqueSubjectIds.includes(s.id))
-        .map(s => ({
+        .filter((s) => uniqueSubjectIds.includes(s.id))
+        .map((s) => ({
           subjectId: s.id,
           name: s.name,
           colorHex: s.colorHex,
@@ -234,13 +304,19 @@ export class TeacherService {
   async getStudentDetails(teacherId: string, studentId: string) {
     const link = await this.linkRepo.findOne({
       where: { teacherId, studentId },
-      relations: ['student', 'student.user'],
+      relations: ["student", "student.user"],
     });
 
-    if (!link) throw new NotFoundException('STUDENT_NOT_FOUND');
+    if (!link) throw new NotFoundException("STUDENT_NOT_FOUND");
 
-    const stats = await this.statsService.getStudentStatsForTeacher(teacherId, studentId);
-    const debt = await this.debtService.getStudentDebtForTeacher(teacherId, studentId);
+    const stats = await this.statsService.getStudentStatsForTeacher(
+      teacherId,
+      studentId
+    );
+    const debt = await this.debtService.getStudentDebtForTeacher(
+      teacherId,
+      studentId
+    );
 
     return {
       studentId,
@@ -259,9 +335,15 @@ export class TeacherService {
   /**
    * Обновляет кастомные поля ученика
    */
-  async updateStudentCustomFields(teacherId: string, studentId: string, customFields: Record<string, string>) {
-    const link = await this.linkRepo.findOne({ where: { teacherId, studentId } });
-    if (!link) throw new NotFoundException('STUDENT_NOT_FOUND');
+  async updateStudentCustomFields(
+    teacherId: string,
+    studentId: string,
+    customFields: Record<string, string>
+  ) {
+    const link = await this.linkRepo.findOne({
+      where: { teacherId, studentId },
+    });
+    if (!link) throw new NotFoundException("STUDENT_NOT_FOUND");
 
     link.customFields = customFields;
     await this.linkRepo.save(link);
@@ -272,8 +354,10 @@ export class TeacherService {
    * Удаляет связь с учеником
    */
   async deleteStudent(teacherId: string, studentId: string) {
-    const link = await this.linkRepo.findOne({ where: { teacherId, studentId } });
-    if (!link) throw new NotFoundException('STUDENT_NOT_FOUND');
+    const link = await this.linkRepo.findOne({
+      where: { teacherId, studentId },
+    });
+    if (!link) throw new NotFoundException("STUDENT_NOT_FOUND");
 
     await this.linkRepo.delete({ teacherId, studentId });
     return { success: true };
@@ -283,11 +367,11 @@ export class TeacherService {
    * Создаёт временное приглашение для ученика (legacy, используйте getInviteLink)
    */
   async createStudentInvitation(teacherId: string) {
-    const token = 'INV_' + randomBytes(16).toString('hex');
+    const token = "INV_" + randomBytes(16).toString("hex");
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
     const invitation = this.invitationRepo.create({
-      type: 'student',
+      type: "student",
       teacherId,
       token,
       expiresAt,
@@ -306,14 +390,16 @@ export class TeacherService {
    * Создаёт приглашение для родителя ученика (legacy)
    */
   async createParentInvitation(teacherId: string, studentId: string) {
-    const link = await this.linkRepo.findOne({ where: { teacherId, studentId } });
-    if (!link) throw new NotFoundException('STUDENT_NOT_FOUND');
+    const link = await this.linkRepo.findOne({
+      where: { teacherId, studentId },
+    });
+    if (!link) throw new NotFoundException("STUDENT_NOT_FOUND");
 
-    const token = 'PARENT_' + randomBytes(16).toString('hex');
+    const token = "PARENT_" + randomBytes(16).toString("hex");
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
     const invitation = this.invitationRepo.create({
-      type: 'parent',
+      type: "parent",
       teacherId,
       studentId,
       token,
@@ -337,12 +423,14 @@ export class TeacherService {
    * Получает список родителей ученика
    */
   async getStudentParents(teacherId: string, studentId: string) {
-    const link = await this.linkRepo.findOne({ where: { teacherId, studentId } });
-    if (!link) throw new NotFoundException('STUDENT_NOT_FOUND');
+    const link = await this.linkRepo.findOne({
+      where: { teacherId, studentId },
+    });
+    if (!link) throw new NotFoundException("STUDENT_NOT_FOUND");
 
     const relations = await this.parentRelationRepo.find({
       where: { teacherId, studentId },
-      relations: ['parent', 'parent.user'],
+      relations: ["parent", "parent.user"],
     });
 
     return relations.map((r) => ({
@@ -356,11 +444,16 @@ export class TeacherService {
   /**
    * Обновляет настройки уведомлений родителя
    */
-  async updateParentNotifications(teacherId: string, studentId: string, parentId: string, notificationsEnabled: boolean) {
+  async updateParentNotifications(
+    teacherId: string,
+    studentId: string,
+    parentId: string,
+    notificationsEnabled: boolean
+  ) {
     const relation = await this.parentRelationRepo.findOne({
       where: { teacherId, studentId, parentId },
     });
-    if (!relation) throw new NotFoundException('PARENT_RELATION_NOT_FOUND');
+    if (!relation) throw new NotFoundException("PARENT_RELATION_NOT_FOUND");
 
     relation.notificationsEnabled = notificationsEnabled;
     await this.parentRelationRepo.save(relation);
@@ -374,32 +467,37 @@ export class TeacherService {
   /**
    * Получает уроки за период с фильтрацией
    */
-  async getLessons(teacherId: string, from: string, to: string, filters?: LessonFilters) {
+  async getLessons(
+    teacherId: string,
+    from: string,
+    to: string,
+    filters?: LessonFilters
+  ) {
     const whereClause: any = {
       teacherId,
       startAt: Between(new Date(from), new Date(to)),
     };
     if (filters?.subjectId) whereClause.subjectId = filters.subjectId;
-    if (filters?.studentId) whereClause.studentId = filters.studentId;
     if (filters?.status) whereClause.status = filters.status;
 
-    const lessons = await this.lessonRepo.find({
+    let lessons = await this.lessonRepo.find({
       where: whereClause,
-      relations: ['student', 'student.user', 'subject'],
-      order: { startAt: 'ASC' },
+      relations: [
+        "subject",
+        "lessonStudents",
+        "lessonStudents.student",
+        "lessonStudents.student.user",
+      ],
+      order: { startAt: "ASC" },
     });
 
-    return lessons.map((l) => ({
-      ...this.formatLesson(l),
-      student: l.student ? {
-        firstName: l.student.user.firstName,
-        lastName: l.student.user.lastName,
-      } : null,
-      subject: {
-        name: l.subject.name,
-        colorHex: l.subject.colorHex,
-      },
-    }));
+    if (filters?.studentId) {
+      lessons = lessons.filter((l) =>
+        l.lessonStudents.some((ls) => ls.studentId === filters.studentId)
+      );
+    }
+
+    return lessons.map((l) => this.formatLessonWithStudents(l));
   }
 
   /**
@@ -408,21 +506,18 @@ export class TeacherService {
   async getLessonDetails(teacherId: string, lessonId: string) {
     const lesson = await this.lessonRepo.findOne({
       where: { id: lessonId, teacherId },
-      relations: ['student', 'student.user', 'subject', 'series'],
+      relations: [
+        "subject",
+        "series",
+        "lessonStudents",
+        "lessonStudents.student",
+        "lessonStudents.student.user",
+      ],
     });
-    if (!lesson) throw new NotFoundException('LESSON_NOT_FOUND');
+    if (!lesson) throw new NotFoundException("LESSON_NOT_FOUND");
 
     return {
-      ...this.formatLesson(lesson),
-      student: lesson.student ? {
-        firstName: lesson.student.user.firstName,
-        lastName: lesson.student.user.lastName,
-        username: lesson.student.user.username,
-      } : null,
-      subject: {
-        name: lesson.subject.name,
-        colorHex: lesson.subject.colorHex,
-      },
+      ...this.formatLessonWithStudents(lesson),
       series: lesson.series
         ? {
             id: lesson.series.id,
@@ -439,33 +534,48 @@ export class TeacherService {
    * Создаёт урок (разовый или серию)
    */
   async createLesson(teacherId: string, data: any) {
-    if (data.studentId) {
+    const studentIds: string[] =
+      data.studentIds || (data.studentId ? [data.studentId] : []);
+
+    for (const studentId of studentIds) {
       const link = await this.linkRepo.findOne({
-        where: { teacherId, studentId: data.studentId },
+        where: { teacherId, studentId },
       });
-      if (!link) throw new ForbiddenException('STUDENT_NOT_LINKED');
+      if (!link) throw new ForbiddenException("STUDENT_NOT_LINKED");
     }
 
     const subject = await this.subjectRepo.findOne({
       where: { id: data.subjectId, teacherId },
     });
-    if (!subject) throw new NotFoundException('SUBJECT_NOT_FOUND');
+    if (!subject) throw new NotFoundException("SUBJECT_NOT_FOUND");
 
-    if (data.recurrence && data.recurrence.frequency !== 'none') {
+    if (data.recurrence && data.recurrence.frequency !== "none") {
       return this.createRecurringLessons(teacherId, data);
     }
 
+    const isFree = data.isFree || false;
+    const priceRub = data.priceRub || 0;
+
     const lesson = this.lessonRepo.create({
       teacherId,
-      studentId: data.studentId || null,
       subjectId: data.subjectId,
       startAt: new Date(data.startAt),
       durationMinutes: data.durationMinutes,
-      priceRub: data.priceRub,
+      priceRub,
+      isFree,
       teacherNote: data.teacherNote,
       reminderMinutesBefore: data.reminderMinutesBefore,
     });
     const saved = await this.lessonRepo.save(lesson);
+
+    for (const studentId of studentIds) {
+      const lessonStudent = this.lessonStudentRepo.create({
+        lessonId: saved.id,
+        studentId,
+        priceRub: isFree ? 0 : priceRub,
+      });
+      await this.lessonStudentRepo.save(lessonStudent);
+    }
 
     return this.getLessonWithDetails(saved.id);
   }
@@ -477,28 +587,42 @@ export class TeacherService {
     const startDate = new Date(data.startAt);
     const timeOfDay = startDate.toTimeString().slice(0, 5);
     const dayOfWeek = startDate.getDay();
+    const studentIds: string[] =
+      data.studentIds || (data.studentId ? [data.studentId] : []);
+    const isFree = data.isFree || false;
+    const priceRub = data.priceRub || 0;
 
     const series = new LessonSeries();
     series.teacherId = teacherId;
-    series.studentId = data.studentId || undefined;
     series.subjectId = data.subjectId;
     series.frequency = data.recurrence.frequency;
     series.dayOfWeek = dayOfWeek;
     series.timeOfDay = timeOfDay;
     series.durationMinutes = data.durationMinutes;
-    series.priceRub = data.priceRub;
+    series.priceRub = priceRub;
+    series.isFree = isFree;
     series.maxOccurrences = data.recurrence.count || 10;
     if (data.recurrence.endDate) {
       series.endDate = new Date(data.recurrence.endDate);
     }
     await this.seriesRepo.save(series);
 
+    for (const studentId of studentIds) {
+      const seriesStudent = this.seriesStudentRepo.create({
+        seriesId: series.id,
+        studentId,
+        priceRub: isFree ? 0 : priceRub,
+      });
+      await this.seriesStudentRepo.save(seriesStudent);
+    }
+
     const lessons: Lesson[] = [];
     let currentDate = new Date(startDate);
-    const endDate = data.recurrence.endDate ? new Date(data.recurrence.endDate) : null;
-    // Если указан count - используем его, иначе если указан endDate - большой лимит, иначе 10
+    const endDate = data.recurrence.endDate
+      ? new Date(data.recurrence.endDate)
+      : null;
     const maxCount = data.recurrence.count || (endDate ? 200 : 10);
-    const intervalDays = data.recurrence.frequency === 'biweekly' ? 14 : 7;
+    const intervalDays = data.recurrence.frequency === "biweekly" ? 14 : 7;
 
     while (lessons.length < maxCount) {
       if (endDate && currentDate > endDate) break;
@@ -506,17 +630,26 @@ export class TeacherService {
       const lesson = this.lessonRepo.create({
         seriesId: series.id,
         teacherId,
-        studentId: data.studentId || null,
         subjectId: data.subjectId,
         startAt: new Date(currentDate),
         durationMinutes: data.durationMinutes,
-        priceRub: data.priceRub,
+        priceRub,
+        isFree,
         teacherNote: data.teacherNote,
         reminderMinutesBefore: data.reminderMinutesBefore,
       });
       await this.lessonRepo.save(lesson);
-      lessons.push(lesson);
 
+      for (const studentId of studentIds) {
+        const lessonStudent = this.lessonStudentRepo.create({
+          lessonId: lesson.id,
+          studentId,
+          priceRub: isFree ? 0 : priceRub,
+        });
+        await this.lessonStudentRepo.save(lessonStudent);
+      }
+
+      lessons.push(lesson);
       currentDate.setDate(currentDate.getDate() + intervalDays);
     }
 
@@ -539,21 +672,31 @@ export class TeacherService {
   /**
    * Конвертирует одиночный урок в серию
    */
-  private async convertToSeries(teacherId: string, existingLesson: Lesson, data: any) {
-    const startDate = data.startAt ? new Date(data.startAt) : existingLesson.startAt;
+  private async convertToSeries(
+    teacherId: string,
+    existingLesson: Lesson,
+    data: any
+  ) {
+    const startDate = data.startAt
+      ? new Date(data.startAt)
+      : existingLesson.startAt;
     const dayOfWeek = startDate.getDay();
-    const timeOfDay = `${startDate.getHours().toString().padStart(2, '0')}:${startDate.getMinutes().toString().padStart(2, '0')}`;
+    const timeOfDay = `${startDate
+      .getHours()
+      .toString()
+      .padStart(2, "0")}:${startDate.getMinutes().toString().padStart(2, "0")}`;
 
     // Создаём серию
     const series = new LessonSeries();
     series.teacherId = teacherId;
-    series.studentId = data.studentId ?? existingLesson.studentId;
     series.subjectId = data.subjectId ?? existingLesson.subjectId;
     series.frequency = data.recurrence.frequency;
     series.dayOfWeek = dayOfWeek;
     series.timeOfDay = timeOfDay;
-    series.durationMinutes = data.durationMinutes ?? existingLesson.durationMinutes;
+    series.durationMinutes =
+      data.durationMinutes ?? existingLesson.durationMinutes;
     series.priceRub = data.priceRub ?? existingLesson.priceRub;
+    series.isFree = data.isFree ?? existingLesson.isFree;
     series.maxOccurrences = data.recurrence.count || 10;
     if (data.recurrence.endDate) {
       series.endDate = new Date(data.recurrence.endDate);
@@ -563,19 +706,21 @@ export class TeacherService {
     // Обновляем существующий урок - привязываем к серии
     existingLesson.seriesId = series.id;
     existingLesson.startAt = startDate;
-    if (data.studentId !== undefined) existingLesson.studentId = data.studentId;
     if (data.subjectId !== undefined) existingLesson.subjectId = data.subjectId;
-    if (data.durationMinutes !== undefined) existingLesson.durationMinutes = data.durationMinutes;
+    if (data.durationMinutes !== undefined)
+      existingLesson.durationMinutes = data.durationMinutes;
     if (data.priceRub !== undefined) existingLesson.priceRub = data.priceRub;
     await this.lessonRepo.save(existingLesson);
 
     // Создаём дополнительные уроки
     const lessons: Lesson[] = [existingLesson];
     let currentDate = new Date(startDate);
-    const endDate = data.recurrence.endDate ? new Date(data.recurrence.endDate) : null;
+    const endDate = data.recurrence.endDate
+      ? new Date(data.recurrence.endDate)
+      : null;
     // Если указан count - используем его, иначе если указан endDate - большой лимит, иначе 10
     const maxCount = data.recurrence.count || (endDate ? 200 : 10);
-    const intervalDays = data.recurrence.frequency === 'biweekly' ? 14 : 7;
+    const intervalDays = data.recurrence.frequency === "biweekly" ? 14 : 7;
 
     // Пропускаем первый урок (он уже есть)
     currentDate.setDate(currentDate.getDate() + intervalDays);
@@ -586,7 +731,6 @@ export class TeacherService {
       const lesson = this.lessonRepo.create({
         seriesId: series.id,
         teacherId,
-        studentId: data.studentId ?? existingLesson.studentId,
         subjectId: data.subjectId ?? existingLesson.subjectId,
         startAt: new Date(currentDate),
         durationMinutes: data.durationMinutes ?? existingLesson.durationMinutes,
@@ -615,18 +759,23 @@ export class TeacherService {
   /**
    * Обновляет урок
    */
-  async updateLesson(teacherId: string, lessonId: string, data: any, applyToSeries?: string) {
+  async updateLesson(
+    teacherId: string,
+    lessonId: string,
+    data: any,
+    applyToSeries?: string
+  ) {
     const lesson = await this.lessonRepo.findOne({
       where: { id: lessonId, teacherId },
-      relations: ['series'],
+      relations: ["series"],
     });
-    if (!lesson) throw new NotFoundException('LESSON_NOT_FOUND');
+    if (!lesson) throw new NotFoundException("LESSON_NOT_FOUND");
 
     if (data.studentId !== undefined && data.studentId !== null) {
       const link = await this.linkRepo.findOne({
         where: { teacherId, studentId: data.studentId },
       });
-      if (!link) throw new ForbiddenException('STUDENT_NOT_LINKED');
+      if (!link) throw new ForbiddenException("STUDENT_NOT_LINKED");
     }
 
     // Validate subjectId if provided
@@ -634,29 +783,42 @@ export class TeacherService {
       const subject = await this.subjectRepo.findOne({
         where: { id: data.subjectId, teacherId },
       });
-      if (!subject) throw new NotFoundException('SUBJECT_NOT_FOUND');
+      if (!subject) throw new NotFoundException("SUBJECT_NOT_FOUND");
     }
 
     // Если передан recurrence и урок не в серии - конвертируем в серию
-    if (data.recurrence && data.recurrence.frequency && data.recurrence.frequency !== 'none' && !lesson.seriesId) {
+    if (
+      data.recurrence &&
+      data.recurrence.frequency &&
+      data.recurrence.frequency !== "none" &&
+      !lesson.seriesId
+    ) {
       return this.convertToSeries(teacherId, lesson, data);
     }
 
     // Fields that can be applied to series (shared across all lessons)
     const seriesUpdateData: any = {};
-    if (data.studentId !== undefined) seriesUpdateData.studentId = data.studentId;
-    if (data.subjectId !== undefined) seriesUpdateData.subjectId = data.subjectId;
-    if (data.durationMinutes !== undefined) seriesUpdateData.durationMinutes = data.durationMinutes;
+    if (data.studentId !== undefined)
+      seriesUpdateData.studentId = data.studentId;
+    if (data.subjectId !== undefined)
+      seriesUpdateData.subjectId = data.subjectId;
+    if (data.durationMinutes !== undefined)
+      seriesUpdateData.durationMinutes = data.durationMinutes;
     if (data.priceRub !== undefined) seriesUpdateData.priceRub = data.priceRub;
 
     // Fields that apply only to individual lesson
     const singleLessonData: any = { ...seriesUpdateData };
-    if (data.startAt !== undefined) singleLessonData.startAt = new Date(data.startAt);
+    if (data.startAt !== undefined)
+      singleLessonData.startAt = new Date(data.startAt);
     if (data.status !== undefined) singleLessonData.status = data.status;
-    if (data.attendance !== undefined) singleLessonData.attendance = data.attendance;
-    if (data.paymentStatus !== undefined) singleLessonData.paymentStatus = data.paymentStatus;
-    if (data.cancelledBy !== undefined) singleLessonData.cancelledBy = data.cancelledBy;
-    if (data.rescheduledTo !== undefined) singleLessonData.rescheduledTo = data.rescheduledTo;
+    if (data.attendance !== undefined)
+      singleLessonData.attendance = data.attendance;
+    if (data.paymentStatus !== undefined)
+      singleLessonData.paymentStatus = data.paymentStatus;
+    if (data.cancelledBy !== undefined)
+      singleLessonData.cancelledBy = data.cancelledBy;
+    if (data.rescheduledTo !== undefined)
+      singleLessonData.rescheduledTo = data.rescheduledTo;
     if (data.teacherNote !== undefined) {
       singleLessonData.teacherNote = data.teacherNote;
       singleLessonData.teacherNoteUpdatedAt = new Date();
@@ -664,25 +826,29 @@ export class TeacherService {
     if (data.lessonReport !== undefined && !lesson.lessonReport) {
       singleLessonData.lessonReport = data.lessonReport;
     }
-    if (data.studentNotePrivate !== undefined) singleLessonData.studentNotePrivate = data.studentNotePrivate;
+    if (data.studentNotePrivate !== undefined)
+      singleLessonData.studentNotePrivate = data.studentNotePrivate;
 
-    if (applyToSeries && applyToSeries !== 'this' && lesson.seriesId) {
+    if (applyToSeries && applyToSeries !== "this" && lesson.seriesId) {
       const whereClause: any = { seriesId: lesson.seriesId, teacherId };
-      if (applyToSeries === 'future') {
+      if (applyToSeries === "future") {
         whereClause.startAt = MoreThanOrEqual(lesson.startAt);
       }
-      
+
       // Apply only series-safe fields to all lessons in series
       if (Object.keys(seriesUpdateData).length > 0) {
         await this.lessonRepo.update(whereClause, seriesUpdateData);
       }
-      
+
       // Apply individual fields to current lesson only
       const individualFields: any = {};
-      if (data.startAt !== undefined) individualFields.startAt = new Date(data.startAt);
+      if (data.startAt !== undefined)
+        individualFields.startAt = new Date(data.startAt);
       if (data.status !== undefined) individualFields.status = data.status;
-      if (data.attendance !== undefined) individualFields.attendance = data.attendance;
-      if (data.paymentStatus !== undefined) individualFields.paymentStatus = data.paymentStatus;
+      if (data.attendance !== undefined)
+        individualFields.attendance = data.attendance;
+      if (data.paymentStatus !== undefined)
+        individualFields.paymentStatus = data.paymentStatus;
       if (data.teacherNote !== undefined) {
         individualFields.teacherNote = data.teacherNote;
         individualFields.teacherNoteUpdatedAt = new Date();
@@ -708,20 +874,24 @@ export class TeacherService {
   /**
    * Удаляет урок
    */
-  async deleteLesson(teacherId: string, lessonId: string, applyToSeries?: string) {
+  async deleteLesson(
+    teacherId: string,
+    lessonId: string,
+    applyToSeries?: string
+  ) {
     const lesson = await this.lessonRepo.findOne({
       where: { id: lessonId, teacherId },
-      relations: ['series'],
+      relations: ["series"],
     });
-    if (!lesson) throw new NotFoundException('LESSON_NOT_FOUND');
+    if (!lesson) throw new NotFoundException("LESSON_NOT_FOUND");
 
-    if (applyToSeries && applyToSeries !== 'this' && lesson.seriesId) {
+    if (applyToSeries && applyToSeries !== "this" && lesson.seriesId) {
       const whereClause: any = { seriesId: lesson.seriesId, teacherId };
-      if (applyToSeries === 'future') {
+      if (applyToSeries === "future") {
         whereClause.startAt = MoreThanOrEqual(lesson.startAt);
       }
       await this.lessonRepo.delete(whereClause);
-      if (applyToSeries === 'all') {
+      if (applyToSeries === "all") {
         await this.seriesRepo.delete({ id: lesson.seriesId });
       }
     } else {
@@ -737,18 +907,26 @@ export class TeacherService {
   async getLessonSeries(teacherId: string) {
     const series = await this.seriesRepo.find({
       where: { teacherId },
-      relations: ['student', 'student.user', 'subject'],
-      order: { createdAt: 'ASC' },
+      relations: [
+        "seriesStudents",
+        "seriesStudents.student",
+        "seriesStudents.student.user",
+        "subject",
+      ],
+      order: { createdAt: "ASC" },
     });
 
     const result = [];
     for (const s of series) {
-      const lessonsCount = await this.lessonRepo.count({ where: { seriesId: s.id } });
-      const lessonsDone = await this.lessonRepo.count({ where: { seriesId: s.id, status: 'done' } });
+      const lessonsCount = await this.lessonRepo.count({
+        where: { seriesId: s.id },
+      });
+      const lessonsDone = await this.lessonRepo.count({
+        where: { seriesId: s.id, status: "done" },
+      });
 
       result.push({
         id: s.id,
-        studentId: s.studentId,
         subjectId: s.subjectId,
         recurrence: {
           frequency: s.frequency,
@@ -758,10 +936,13 @@ export class TeacherService {
         timeOfDay: s.timeOfDay,
         durationMinutes: s.durationMinutes,
         priceRub: s.priceRub,
-        student: s.student ? {
-          firstName: s.student.user.firstName,
-          lastName: s.student.user.lastName,
-        } : null,
+        isFree: s.isFree,
+        students: (s.seriesStudents || []).map((ss) => ({
+          studentId: ss.studentId,
+          firstName: ss.student?.user?.firstName,
+          lastName: ss.student?.user?.lastName,
+          priceRub: ss.priceRub,
+        })),
         subject: {
           name: s.subject.name,
           colorHex: s.subject.colorHex,
@@ -779,19 +960,22 @@ export class TeacherService {
    * Получает уроки конкретного ученика
    */
   async getStudentLessons(teacherId: string, studentId: string, filters?: any) {
-    const link = await this.linkRepo.findOne({ where: { teacherId, studentId } });
-    if (!link) throw new NotFoundException('STUDENT_NOT_FOUND');
+    const link = await this.linkRepo.findOne({
+      where: { teacherId, studentId },
+    });
+    if (!link) throw new NotFoundException("STUDENT_NOT_FOUND");
 
     const whereClause: any = { teacherId, studentId };
     if (filters?.status) whereClause.status = filters.status;
-    if (filters?.paymentStatus) whereClause.paymentStatus = filters.paymentStatus;
+    if (filters?.paymentStatus)
+      whereClause.paymentStatus = filters.paymentStatus;
     if (filters?.attendance) whereClause.attendance = filters.attendance;
     if (filters?.subjectId) whereClause.subjectId = filters.subjectId;
 
     const lessons = await this.lessonRepo.find({
       where: whereClause,
-      relations: ['subject'],
-      order: { startAt: 'DESC' },
+      relations: ["subject"],
+      order: { startAt: "DESC" },
     });
 
     return lessons.map((l) => ({
@@ -801,9 +985,8 @@ export class TeacherService {
       startAt: l.startAt.toISOString(),
       durationMinutes: l.durationMinutes,
       priceRub: l.priceRub,
+      isFree: l.isFree,
       status: l.status,
-      attendance: l.attendance,
-      paymentStatus: l.paymentStatus,
       cancelledBy: l.cancelledBy,
       teacherNote: l.teacherNote,
       teacherNoteUpdatedAt: l.teacherNoteUpdatedAt?.toISOString() || null,
@@ -820,18 +1003,25 @@ export class TeacherService {
    * Получает детальную информацию о долге ученика
    */
   async getStudentDebtDetails(teacherId: string, studentId: string) {
-    const link = await this.linkRepo.findOne({ where: { teacherId, studentId } });
-    if (!link) throw new NotFoundException('STUDENT_NOT_FOUND');
+    const link = await this.linkRepo.findOne({
+      where: { teacherId, studentId },
+    });
+    if (!link) throw new NotFoundException("STUDENT_NOT_FOUND");
 
-    return this.debtService.getStudentDebtDetailsForTeacher(teacherId, studentId);
+    return this.debtService.getStudentDebtDetailsForTeacher(
+      teacherId,
+      studentId
+    );
   }
 
   /**
    * Получает краткую статистику ученика (для карточки)
    */
   async getStudentCardStats(teacherId: string, studentId: string) {
-    const link = await this.linkRepo.findOne({ where: { teacherId, studentId } });
-    if (!link) throw new NotFoundException('STUDENT_NOT_FOUND');
+    const link = await this.linkRepo.findOne({
+      where: { teacherId, studentId },
+    });
+    if (!link) throw new NotFoundException("STUDENT_NOT_FOUND");
 
     return this.statsService.getStudentCardStats(teacherId, studentId);
   }
@@ -840,10 +1030,161 @@ export class TeacherService {
    * Получает детальную статистику ученика
    */
   async getStudentDetailedStats(teacherId: string, studentId: string) {
-    const link = await this.linkRepo.findOne({ where: { teacherId, studentId } });
-    if (!link) throw new NotFoundException('STUDENT_NOT_FOUND');
+    const link = await this.linkRepo.findOne({
+      where: { teacherId, studentId },
+    });
+    if (!link) throw new NotFoundException("STUDENT_NOT_FOUND");
 
     return this.statsService.getStudentDetailedStats(teacherId, studentId);
+  }
+
+  // ============================================
+  // УПРАВЛЕНИЕ УЧЕНИКАМИ НА УРОКЕ
+  // ============================================
+
+  /**
+   * Добавляет ученика на урок
+   */
+  async addStudentToLesson(
+    teacherId: string,
+    lessonId: string,
+    studentId: string,
+    priceRub?: number
+  ) {
+    const lesson = await this.lessonRepo.findOne({
+      where: { id: lessonId, teacherId },
+    });
+    if (!lesson) throw new NotFoundException("LESSON_NOT_FOUND");
+
+    const link = await this.linkRepo.findOne({
+      where: { teacherId, studentId },
+    });
+    if (!link) throw new ForbiddenException("STUDENT_NOT_LINKED");
+
+    const existing = await this.lessonStudentRepo.findOne({
+      where: { lessonId, studentId },
+    });
+    if (existing) throw new ConflictException("STUDENT_ALREADY_ON_LESSON");
+
+    const lessonStudent = this.lessonStudentRepo.create({
+      lessonId,
+      studentId,
+      priceRub: lesson.isFree ? 0 : priceRub ?? lesson.priceRub,
+    });
+    await this.lessonStudentRepo.save(lessonStudent);
+
+    return this.getLessonWithDetails(lessonId);
+  }
+
+  /**
+   * Удаляет ученика с урока
+   */
+  async removeStudentFromLesson(
+    teacherId: string,
+    lessonId: string,
+    studentId: string
+  ) {
+    const lesson = await this.lessonRepo.findOne({
+      where: { id: lessonId, teacherId },
+    });
+    if (!lesson) throw new NotFoundException("LESSON_NOT_FOUND");
+
+    const lessonStudent = await this.lessonStudentRepo.findOne({
+      where: { lessonId, studentId },
+    });
+    if (!lessonStudent) throw new NotFoundException("STUDENT_NOT_ON_LESSON");
+
+    await this.lessonStudentRepo.delete({ lessonId, studentId });
+
+    return this.getLessonWithDetails(lessonId);
+  }
+
+  /**
+   * Отмечает урок как проведённый с данными по каждому ученику
+   */
+  async completeLesson(
+    teacherId: string,
+    lessonId: string,
+    studentsData: Array<{
+      studentId: string;
+      attendance: "attended" | "missed";
+      rating?: number;
+      paymentStatus?: "paid" | "unpaid";
+    }>
+  ) {
+    const lesson = await this.lessonRepo.findOne({
+      where: { id: lessonId, teacherId },
+    });
+    if (!lesson) throw new NotFoundException("LESSON_NOT_FOUND");
+
+    for (const data of studentsData) {
+      const lessonStudent = await this.lessonStudentRepo.findOne({
+        where: { lessonId, studentId: data.studentId },
+      });
+      if (!lessonStudent) continue;
+
+      lessonStudent.attendance = data.attendance;
+
+      if (data.attendance === "missed") {
+        lessonStudent.rating = null;
+        lessonStudent.paymentStatus = "unpaid";
+      } else {
+        if (data.rating !== undefined) lessonStudent.rating = data.rating;
+        if (data.paymentStatus !== undefined)
+          lessonStudent.paymentStatus = data.paymentStatus;
+      }
+
+      await this.lessonStudentRepo.save(lessonStudent);
+    }
+
+    lesson.status = "done";
+    await this.lessonRepo.save(lesson);
+
+    return this.getLessonWithDetails(lessonId);
+  }
+
+  /**
+   * Массовое обновление учеников на уроке
+   */
+  async bulkUpdateLessonStudents(
+    teacherId: string,
+    lessonId: string,
+    action: "set_attendance" | "set_rating" | "set_payment",
+    value: string | number
+  ) {
+    const lesson = await this.lessonRepo.findOne({
+      where: { id: lessonId, teacherId },
+    });
+    if (!lesson) throw new NotFoundException("LESSON_NOT_FOUND");
+
+    const lessonStudents = await this.lessonStudentRepo.find({
+      where: { lessonId },
+    });
+
+    for (const ls of lessonStudents) {
+      switch (action) {
+        case "set_attendance":
+          ls.attendance = value as string;
+          if (value === "missed") {
+            ls.rating = null;
+            ls.paymentStatus = "unpaid";
+          }
+          break;
+        case "set_rating":
+          if (ls.attendance === "attended") {
+            ls.rating = value as number;
+          }
+          break;
+        case "set_payment":
+          if (ls.attendance === "attended") {
+            ls.paymentStatus = value as string;
+          }
+          break;
+      }
+      await this.lessonStudentRepo.save(ls);
+    }
+
+    return this.getLessonWithDetails(lessonId);
   }
 
   // ============================================
@@ -853,21 +1194,59 @@ export class TeacherService {
   private async getLessonWithDetails(lessonId: string) {
     const full = await this.lessonRepo.findOne({
       where: { id: lessonId },
-      relations: ['student', 'student.user', 'subject'],
+      relations: [
+        "subject",
+        "lessonStudents",
+        "lessonStudents.student",
+        "lessonStudents.student.user",
+      ],
     });
 
-    if (!full) throw new NotFoundException('LESSON_NOT_FOUND');
+    if (!full) throw new NotFoundException("LESSON_NOT_FOUND");
+    return this.formatLessonWithStudents(full);
+  }
+
+  private formatLessonWithStudents(lesson: Lesson) {
+    const studentsCount = lesson.lessonStudents?.length || 0;
 
     return {
-      ...this.formatLesson(full),
-      student: full.student ? {
-        firstName: full.student.user.firstName,
-        lastName: full.student.user.lastName,
-      } : null,
-      subject: {
-        name: full.subject.name,
-        colorHex: full.subject.colorHex,
-      },
+      id: lesson.id,
+      seriesId: lesson.seriesId,
+      teacherId: lesson.teacherId,
+      subjectId: lesson.subjectId,
+      startAt: lesson.startAt.toISOString(),
+      durationMinutes: lesson.durationMinutes,
+      priceRub: lesson.priceRub,
+      isFree: lesson.isFree,
+      status: lesson.status,
+      isGroupLesson: studentsCount > 1,
+      cancelledBy: lesson.cancelledBy,
+      rescheduledTo: lesson.rescheduledTo,
+      teacherNote: lesson.teacherNote,
+      teacherNoteUpdatedAt: lesson.teacherNoteUpdatedAt?.toISOString() || null,
+      lessonReport: lesson.lessonReport,
+      studentNotePrivate: lesson.studentNotePrivate,
+      studentNoteForTeacher: lesson.studentNoteForTeacher,
+      reminderMinutesBefore: lesson.reminderMinutesBefore,
+      createdAt: lesson.createdAt.toISOString(),
+      updatedAt: lesson.updatedAt.toISOString(),
+      students: (lesson.lessonStudents || []).map((ls) => ({
+        id: ls.id,
+        studentId: ls.studentId,
+        firstName: ls.student?.user?.firstName,
+        lastName: ls.student?.user?.lastName,
+        username: ls.student?.user?.username,
+        priceRub: ls.priceRub,
+        attendance: ls.attendance,
+        rating: ls.rating,
+        paymentStatus: ls.paymentStatus,
+      })),
+      subject: lesson.subject
+        ? {
+            name: lesson.subject.name,
+            colorHex: lesson.subject.colorHex,
+          }
+        : null,
     };
   }
 
@@ -876,14 +1255,12 @@ export class TeacherService {
       id: lesson.id,
       seriesId: lesson.seriesId,
       teacherId: lesson.teacherId,
-      studentId: lesson.studentId,
       subjectId: lesson.subjectId,
       startAt: lesson.startAt.toISOString(),
       durationMinutes: lesson.durationMinutes,
       priceRub: lesson.priceRub,
+      isFree: lesson.isFree,
       status: lesson.status,
-      attendance: lesson.attendance,
-      paymentStatus: lesson.paymentStatus,
       cancelledBy: lesson.cancelledBy,
       rescheduledTo: lesson.rescheduledTo,
       teacherNote: lesson.teacherNote,

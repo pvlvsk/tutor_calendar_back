@@ -1,12 +1,21 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, OneToOne, OneToMany, JoinColumn } from 'typeorm';
-import { User } from './user.entity';
-import { TeacherStudentLink } from './teacher-student-link.entity';
-import { Lesson } from './lesson.entity';
-import { LessonSeries } from './lesson-series.entity';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  OneToOne,
+  OneToMany,
+  JoinColumn,
+} from "typeorm";
+import { User } from "./user.entity";
+import { TeacherStudentLink } from "./teacher-student-link.entity";
+import { LessonStudent } from "./lesson-student.entity";
+import { LessonSeriesStudent } from "./lesson-series-student.entity";
 
-@Entity('student_profiles')
+@Entity("student_profiles")
 export class StudentProfile {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn("uuid")
   id: string;
 
   @Column({ unique: true })
@@ -15,7 +24,7 @@ export class StudentProfile {
   @Column({ unique: true })
   parentInviteCode: string;
 
-  @Column({ type: 'jsonb', nullable: true })
+  @Column({ type: "jsonb", nullable: true })
   customFields: Record<string, string>;
 
   @CreateDateColumn()
@@ -24,17 +33,16 @@ export class StudentProfile {
   @UpdateDateColumn()
   updatedAt: Date;
 
-  @OneToOne(() => User, (user) => user.studentProfile, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'userId' })
+  @OneToOne(() => User, (user) => user.studentProfile, { onDelete: "CASCADE" })
+  @JoinColumn({ name: "userId" })
   user: User;
 
   @OneToMany(() => TeacherStudentLink, (link) => link.student)
   teacherStudentLinks: TeacherStudentLink[];
 
-  @OneToMany(() => Lesson, (lesson) => lesson.student)
-  lessons: Lesson[];
+  @OneToMany(() => LessonStudent, (ls) => ls.student)
+  lessonStudents: LessonStudent[];
 
-  @OneToMany(() => LessonSeries, (series) => series.student)
-  lessonSeries: LessonSeries[];
+  @OneToMany(() => LessonSeriesStudent, (ss) => ss.student)
+  seriesStudents: LessonSeriesStudent[];
 }
-
