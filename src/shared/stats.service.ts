@@ -213,11 +213,49 @@ export class StatsService {
       subjectName: r.lesson.subject?.name || "",
     }));
 
+    // Ближайшие уроки (до 5 штук)
+    const now = new Date();
+
+    // DEBUG: логируем для отладки
+    console.log(
+      `[getStudentDetailedStats] teacherRecords total: ${teacherRecords.length}`
+    );
+    console.log(
+      `[getStudentDetailedStats] planned lessons:`,
+      teacherRecords.filter((r) => r.lesson?.status === "planned").length
+    );
+    console.log(
+      `[getStudentDetailedStats] future planned:`,
+      teacherRecords.filter(
+        (r) =>
+          r.lesson?.status === "planned" && new Date(r.lesson.startAt) > now
+      ).length
+    );
+
+    const upcomingLessons = teacherRecords
+      .filter(
+        (r) =>
+          r.lesson?.status === "planned" && new Date(r.lesson.startAt) > now
+      )
+      .sort(
+        (a, b) =>
+          new Date(a.lesson.startAt).getTime() -
+          new Date(b.lesson.startAt).getTime()
+      )
+      .slice(0, 5)
+      .map((r) => ({
+        lessonId: r.lesson.id,
+        startAt: r.lesson.startAt.toISOString(),
+        subjectName: r.lesson.subject?.name || "",
+        colorHex: r.lesson.subject?.colorHex || "#888888",
+      }));
+
     return {
       debt,
       attendance,
       bySubject,
       recentMissedLessons,
+      upcomingLessons,
     };
   }
 
@@ -247,16 +285,22 @@ export class StatsService {
   private calculateStatsBySubject(records: LessonStudent[]): SubjectStats[] {
     const bySubject = new Map<
       string,
-      { name: string; attended: number; total: number }
+      { name: string; colorHex: string; attended: number; total: number }
     >();
 
     for (const r of records) {
       const subjectId = r.lesson?.subjectId;
       const subjectName = r.lesson?.subject?.name || "";
+      const colorHex = r.lesson?.subject?.colorHex || "#888888";
       if (!subjectId) continue;
 
       if (!bySubject.has(subjectId)) {
-        bySubject.set(subjectId, { name: subjectName, attended: 0, total: 0 });
+        bySubject.set(subjectId, {
+          name: subjectName,
+          colorHex,
+          attended: 0,
+          total: 0,
+        });
       }
       const stats = bySubject.get(subjectId)!;
       stats.total++;
@@ -266,7 +310,7 @@ export class StatsService {
     return Array.from(bySubject.entries()).map(([id, s]) => ({
       subjectId: id,
       subjectName: s.name,
-      colorHex: "#888888",
+      colorHex: s.colorHex,
       lessonsPlanned: s.total,
       lessonsAttended: s.attended,
       attendanceRate:

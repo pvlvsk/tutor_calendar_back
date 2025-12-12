@@ -70,9 +70,16 @@ let TeacherService = class TeacherService {
     }
     async getSubjects(teacherId) {
         return this.subjectRepo.find({
-            where: { teacherId },
+            where: { teacherId, archivedAt: (0, typeorm_2.IsNull)() },
             order: { createdAt: "ASC" },
         });
+    }
+    async getArchivedSubjects(teacherId) {
+        const subjects = await this.subjectRepo.find({
+            where: { teacherId },
+            order: { archivedAt: "DESC" },
+        });
+        return subjects.filter((s) => s.archivedAt !== null);
     }
     async createSubject(teacherId, data) {
         const existingByName = await this.subjectRepo.findOne({
@@ -163,9 +170,25 @@ let TeacherService = class TeacherService {
         if (!subject)
             throw new common_1.NotFoundException("SUBJECT_NOT_FOUND");
         const lessonsCount = await this.lessonRepo.count({ where: { subjectId } });
-        if (lessonsCount > 0)
-            throw new common_1.ConflictException("SUBJECT_HAS_LESSONS");
+        if (lessonsCount > 0) {
+            subject.archivedAt = new Date();
+            await this.subjectRepo.save(subject);
+            return { success: true, action: "archived", lessonsCount };
+        }
         await this.subjectRepo.delete({ id: subjectId });
+        return { success: true, action: "deleted" };
+    }
+    async restoreSubject(teacherId, subjectId) {
+        const subject = await this.subjectRepo.findOne({
+            where: { id: subjectId, teacherId },
+        });
+        if (!subject)
+            throw new common_1.NotFoundException("SUBJECT_NOT_FOUND");
+        if (!subject.archivedAt) {
+            throw new common_1.ConflictException("SUBJECT_NOT_ARCHIVED");
+        }
+        subject.archivedAt = null;
+        await this.subjectRepo.save(subject);
         return { success: true };
     }
     async getStudents(teacherId) {
@@ -550,12 +573,16 @@ let TeacherService = class TeacherService {
         };
     }
     async updateLesson(teacherId, lessonId, data, applyToSeries) {
+        console.log(`[updateLesson] lessonId: ${lessonId}`);
+        console.log(`[updateLesson] applyToSeries: ${applyToSeries}`);
+        console.log(`[updateLesson] data:`, JSON.stringify(data, null, 2));
         const lesson = await this.lessonRepo.findOne({
             where: { id: lessonId, teacherId },
             relations: ["series"],
         });
         if (!lesson)
             throw new common_1.NotFoundException("LESSON_NOT_FOUND");
+        console.log(`[updateLesson] lesson.seriesId: ${lesson.seriesId}`);
         if (data.studentId !== undefined && data.studentId !== null) {
             const link = await this.linkRepo.findOne({
                 where: { teacherId, studentId: data.studentId },
@@ -577,14 +604,16 @@ let TeacherService = class TeacherService {
             return this.convertToSeries(teacherId, lesson, data);
         }
         const seriesUpdateData = {};
-        if (data.studentId !== undefined)
-            seriesUpdateData.studentId = data.studentId;
         if (data.subjectId !== undefined)
             seriesUpdateData.subjectId = data.subjectId;
         if (data.durationMinutes !== undefined)
             seriesUpdateData.durationMinutes = data.durationMinutes;
+        if (data.isFree !== undefined)
+            seriesUpdateData.isFree = data.isFree;
         if (data.priceRub !== undefined)
             seriesUpdateData.priceRub = data.priceRub;
+        if (data.isFree === true)
+            seriesUpdateData.priceRub = 0;
         const singleLessonData = { ...seriesUpdateData };
         if (data.startAt !== undefined)
             singleLessonData.startAt = new Date(data.startAt);
@@ -608,12 +637,18 @@ let TeacherService = class TeacherService {
         if (data.studentNotePrivate !== undefined)
             singleLessonData.studentNotePrivate = data.studentNotePrivate;
         if (applyToSeries && applyToSeries !== "this" && lesson.seriesId) {
+            console.log(`[updateLesson] Applying to series: ${applyToSeries}`);
             const whereClause = { seriesId: lesson.seriesId, teacherId };
             if (applyToSeries === "future") {
                 whereClause.startAt = (0, typeorm_2.MoreThanOrEqual)(lesson.startAt);
             }
+            console.log(`[updateLesson] whereClause:`, whereClause);
             if (Object.keys(seriesUpdateData).length > 0) {
+                console.log(`[updateLesson] seriesUpdateData:`, seriesUpdateData);
                 await this.lessonRepo.update(whereClause, seriesUpdateData);
+            }
+            else {
+                console.log(`[updateLesson] seriesUpdateData is empty`);
             }
             const individualFields = {};
             if (data.startAt !== undefined)
@@ -632,16 +667,57 @@ let TeacherService = class TeacherService {
                 await this.lessonRepo.update({ id: lessonId }, individualFields);
             }
             const seriesUpdate = {};
-            if (data.studentId !== undefined)
-                seriesUpdate.studentId = data.studentId;
             if (data.subjectId !== undefined)
                 seriesUpdate.subjectId = data.subjectId;
             if (Object.keys(seriesUpdate).length > 0) {
                 await this.seriesRepo.update({ id: lesson.seriesId }, seriesUpdate);
             }
+            if (data.studentIds && Array.isArray(data.studentIds)) {
+                console.log(`[updateLesson] Updating students for series: ${data.studentIds}`);
+                const lessonsToUpdate = await this.lessonRepo.find({
+                    where: whereClause,
+                });
+                console.log(`[updateLesson] Found ${lessonsToUpdate.length} lessons to update students`);
+                const priceRub = data.isFree ? 0 : data.priceRub ?? lesson.priceRub;
+                for (const lessonToUpdate of lessonsToUpdate) {
+                    await this.lessonStudentRepo.delete({ lessonId: lessonToUpdate.id });
+                    for (const studentId of data.studentIds) {
+                        const lessonStudent = this.lessonStudentRepo.create({
+                            lessonId: lessonToUpdate.id,
+                            studentId,
+                            priceRub,
+                        });
+                        await this.lessonStudentRepo.save(lessonStudent);
+                    }
+                }
+                await this.seriesStudentRepo.delete({ seriesId: lesson.seriesId });
+                for (const studentId of data.studentIds) {
+                    const seriesStudent = this.seriesStudentRepo.create({
+                        seriesId: lesson.seriesId,
+                        studentId,
+                        priceRub,
+                    });
+                    await this.seriesStudentRepo.save(seriesStudent);
+                }
+                console.log(`[updateLesson] Students updated successfully`);
+            }
         }
         else {
             await this.lessonRepo.update({ id: lessonId }, singleLessonData);
+            if (data.studentIds && Array.isArray(data.studentIds)) {
+                console.log(`[updateLesson] Updating students for single lesson: ${data.studentIds}`);
+                const priceRub = data.isFree ? 0 : data.priceRub ?? lesson.priceRub;
+                await this.lessonStudentRepo.delete({ lessonId });
+                for (const studentId of data.studentIds) {
+                    const lessonStudent = this.lessonStudentRepo.create({
+                        lessonId,
+                        studentId,
+                        priceRub,
+                    });
+                    await this.lessonStudentRepo.save(lessonStudent);
+                }
+                console.log(`[updateLesson] Students updated for single lesson`);
+            }
         }
         return this.getLessonWithDetails(lessonId);
     }
@@ -816,6 +892,23 @@ let TeacherService = class TeacherService {
             throw new common_1.NotFoundException("STUDENT_NOT_ON_LESSON");
         await this.lessonStudentRepo.delete({ lessonId, studentId });
         return this.getLessonWithDetails(lessonId);
+    }
+    async updateLessonStudent(teacherId, lessonId, studentId, data) {
+        const lesson = await this.lessonRepo.findOne({
+            where: { id: lessonId, teacherId },
+        });
+        if (!lesson)
+            throw new common_1.NotFoundException("LESSON_NOT_FOUND");
+        const lessonStudent = await this.lessonStudentRepo.findOne({
+            where: { lessonId, studentId },
+        });
+        if (!lessonStudent)
+            throw new common_1.NotFoundException("STUDENT_NOT_ON_LESSON");
+        if (data.paymentStatus !== undefined) {
+            lessonStudent.paymentStatus = data.paymentStatus;
+        }
+        await this.lessonStudentRepo.save(lessonStudent);
+        return { success: true, paymentStatus: lessonStudent.paymentStatus };
     }
     async completeLesson(teacherId, lessonId, studentsData) {
         const lesson = await this.lessonRepo.findOne({

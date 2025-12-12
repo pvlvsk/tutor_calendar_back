@@ -1,8 +1,8 @@
-export type LessonStatus = 'planned' | 'done' | 'cancelled' | 'rescheduled';
-export type AttendanceStatus = 'unknown' | 'attended' | 'missed';
-export type PaymentStatus = 'unpaid' | 'paid' | 'prepaid';
-export type CancelledBy = 'teacher' | 'student';
-export type CancellationReason = 'illness' | 'other' | null;
+export type LessonStatus = "planned" | "done" | "cancelled" | "rescheduled";
+export type AttendanceStatus = "unknown" | "attended" | "missed";
+export type PaymentStatus = "unpaid" | "paid" | "prepaid";
+export type CancelledBy = "teacher" | "student";
+export type CancellationReason = "illness" | "other" | null;
 export interface LessonFilters {
     subjectId?: string;
     studentId?: string;
@@ -97,6 +97,12 @@ export interface StudentCardStats {
         subjectName: string;
     } | null;
 }
+export interface UpcomingLesson {
+    lessonId: string;
+    startAt: string;
+    subjectName: string;
+    colorHex: string;
+}
 export interface StudentDetailedStatsForTeacher {
     debt: DetailedDebt;
     attendance: AttendanceStats;
@@ -107,6 +113,7 @@ export interface StudentDetailedStatsForTeacher {
         subjectName: string;
         reason?: string;
     }>;
+    upcomingLessons: UpcomingLesson[];
 }
 export interface Achievement {
     id: string;

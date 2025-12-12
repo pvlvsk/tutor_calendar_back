@@ -40,6 +40,16 @@ export declare class TeacherController {
     }): Promise<import("../database/entities").Subject | null>;
     deleteSubject(req: any, subjectId: string): Promise<{
         success: boolean;
+        action: string;
+        lessonsCount: number;
+    } | {
+        success: boolean;
+        action: string;
+        lessonsCount?: undefined;
+    }>;
+    getArchivedSubjects(req: any): Promise<import("../database/entities").Subject[]>;
+    restoreSubject(req: any, subjectId: string): Promise<{
+        success: boolean;
     }>;
     getStudents(req: any): Promise<{
         studentId: string;
@@ -385,6 +395,12 @@ export declare class TeacherController {
             name: string;
             colorHex: string;
         } | null;
+    }>;
+    updateLessonStudent(req: any, lessonId: string, studentId: string, body: {
+        paymentStatus?: "paid" | "unpaid";
+    }): Promise<{
+        success: boolean;
+        paymentStatus: string;
     }>;
     completeLesson(req: any, lessonId: string, body: {
         students: Array<{

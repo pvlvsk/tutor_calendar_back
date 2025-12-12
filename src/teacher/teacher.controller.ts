@@ -81,9 +81,21 @@ export class TeacherController {
   }
 
   @Delete("me/subjects/:subjectId")
-  @ApiOperation({ summary: "Удалить предмет" })
+  @ApiOperation({ summary: "Удалить/архивировать предмет" })
   deleteSubject(@Request() req: any, @Param("subjectId") subjectId: string) {
     return this.teacherService.deleteSubject(req.user.profileId, subjectId);
+  }
+
+  @Get("me/subjects/archived")
+  @ApiOperation({ summary: "Получить архивированные предметы" })
+  getArchivedSubjects(@Request() req: any) {
+    return this.teacherService.getArchivedSubjects(req.user.profileId);
+  }
+
+  @Post("me/subjects/:subjectId/restore")
+  @ApiOperation({ summary: "Восстановить архивированный предмет" })
+  restoreSubject(@Request() req: any, @Param("subjectId") subjectId: string) {
+    return this.teacherService.restoreSubject(req.user.profileId, subjectId);
   }
 
   @Get("me/students")
@@ -280,6 +292,22 @@ export class TeacherController {
       req.user.profileId,
       lessonId,
       studentId
+    );
+  }
+
+  @Patch("me/lessons/:lessonId/students/:studentId")
+  @ApiOperation({ summary: "Обновить данные ученика на уроке" })
+  updateLessonStudent(
+    @Request() req: any,
+    @Param("lessonId") lessonId: string,
+    @Param("studentId") studentId: string,
+    @Body() body: { paymentStatus?: "paid" | "unpaid" }
+  ) {
+    return this.teacherService.updateLessonStudent(
+      req.user.profileId,
+      lessonId,
+      studentId,
+      body
     );
   }
 

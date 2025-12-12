@@ -43,6 +43,7 @@ export declare class TeacherService {
         timezone: string;
     }>;
     getSubjects(teacherId: string): Promise<Subject[]>;
+    getArchivedSubjects(teacherId: string): Promise<Subject[]>;
     createSubject(teacherId: string, data: {
         name: string;
         code?: string;
@@ -54,6 +55,15 @@ export declare class TeacherService {
         colorHex?: string;
     }): Promise<Subject | null>;
     deleteSubject(teacherId: string, subjectId: string): Promise<{
+        success: boolean;
+        action: string;
+        lessonsCount: number;
+    } | {
+        success: boolean;
+        action: string;
+        lessonsCount?: undefined;
+    }>;
+    restoreSubject(teacherId: string, subjectId: string): Promise<{
         success: boolean;
     }>;
     getStudents(teacherId: string): Promise<{
@@ -443,6 +453,12 @@ export declare class TeacherService {
             name: string;
             colorHex: string;
         } | null;
+    }>;
+    updateLessonStudent(teacherId: string, lessonId: string, studentId: string, data: {
+        paymentStatus?: "paid" | "unpaid";
+    }): Promise<{
+        success: boolean;
+        paymentStatus: string;
     }>;
     completeLesson(teacherId: string, lessonId: string, studentsData: Array<{
         studentId: string;

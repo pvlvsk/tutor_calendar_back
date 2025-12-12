@@ -2,11 +2,11 @@
  * Общие типы данных для всего приложения
  */
 
-export type LessonStatus = 'planned' | 'done' | 'cancelled' | 'rescheduled';
-export type AttendanceStatus = 'unknown' | 'attended' | 'missed';
-export type PaymentStatus = 'unpaid' | 'paid' | 'prepaid';
-export type CancelledBy = 'teacher' | 'student';
-export type CancellationReason = 'illness' | 'other' | null;
+export type LessonStatus = "planned" | "done" | "cancelled" | "rescheduled";
+export type AttendanceStatus = "unknown" | "attended" | "missed";
+export type PaymentStatus = "unpaid" | "paid" | "prepaid";
+export type CancelledBy = "teacher" | "student";
+export type CancellationReason = "illness" | "other" | null;
 
 export interface LessonFilters {
   subjectId?: string;
@@ -76,16 +76,18 @@ export interface DetailedDebt extends DebtInfo {
 // Долг с разбивкой по учителям
 export interface DebtByTeachers {
   totalDebt: DebtInfo;
-  byTeacher: Array<DebtInfo & {
-    teacherId: string;
-    teacherName: string;
-    lessons: Array<{
-      lessonId: string;
-      startAt: string;
-      priceRub: number;
-      subjectName: string;
-    }>;
-  }>;
+  byTeacher: Array<
+    DebtInfo & {
+      teacherId: string;
+      teacherName: string;
+      lessons: Array<{
+        lessonId: string;
+        startAt: string;
+        priceRub: number;
+        subjectName: string;
+      }>;
+    }
+  >;
 }
 
 // Данные пользователя для ответов
@@ -127,6 +129,14 @@ export interface StudentCardStats {
   } | null;
 }
 
+// Информация о предстоящем уроке
+export interface UpcomingLesson {
+  lessonId: string;
+  startAt: string;
+  subjectName: string;
+  colorHex: string;
+}
+
 // Детальная статистика ученика (для учителя)
 export interface StudentDetailedStatsForTeacher {
   debt: DetailedDebt;
@@ -138,6 +148,7 @@ export interface StudentDetailedStatsForTeacher {
     subjectName: string;
     reason?: string;
   }>;
+  upcomingLessons: UpcomingLesson[];
 }
 
 // Достижение
@@ -161,4 +172,3 @@ export interface StudentGamifiedStats {
   };
   achievements: Achievement[];
 }
-

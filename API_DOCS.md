@@ -13,6 +13,7 @@ Swagger UI: http://localhost:3000/docs
 ## Авторизация
 
 Все защищённые эндпоинты требуют JWT токен:
+
 ```
 Authorization: Bearer <token>
 ```
@@ -20,12 +21,14 @@ Authorization: Bearer <token>
 ## Модули
 
 ### Auth (/api/auth)
+
 - POST /init - инициализация через Telegram
 - POST /select-role - выбор роли
 - POST /beta-activate - активация бета
 - GET /beta-status - статус бета
 
 ### Teachers (/api/teachers)
+
 Требует роль: teacher
 
 - GET/PATCH /me - профиль
@@ -43,6 +46,7 @@ Authorization: Bearer <token>
 - GET /me/debts
 
 ### Students (/api/students)
+
 Требует роль: student
 
 - GET/PATCH /me - профиль
@@ -56,6 +60,7 @@ Authorization: Bearer <token>
 - GET /me/achievements
 
 ### Parents (/api/parents)
+
 Требует роль: parent
 
 - GET/PATCH /me - профиль
@@ -71,6 +76,7 @@ Authorization: Bearer <token>
 - PATCH /me/children/:id/notifications
 
 ### Health (/api/health)
+
 - GET / - проверка состояния
 
 ## База данных
@@ -78,6 +84,7 @@ Authorization: Bearer <token>
 PostgreSQL через TypeORM.
 
 Entities:
+
 - User
 - TeacherProfile
 - StudentProfile
@@ -94,6 +101,13 @@ Entities:
 ### Групповые уроки
 
 Уроки поддерживают несколько учеников через таблицу `lesson_students`:
+
 - Каждый ученик имеет индивидуальную цену, посещаемость, оценку и статус оплаты
 - `isGroupLesson` — вычисляемое поле (true если учеников > 1)
 - `isFree` — флаг бесплатного урока (все цены = 0)
+
+**Обновление учеников через PATCH /lessons/:id:**
+
+- Передача `studentIds` в теле запроса полностью заменяет список учеников
+- При `applyToSeries=all|future` — обновляет учеников на всех уроках серии
+- Также обновляет `lesson_series_students` для синхронизации серии

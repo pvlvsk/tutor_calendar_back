@@ -43,6 +43,12 @@ let TeacherController = class TeacherController {
     deleteSubject(req, subjectId) {
         return this.teacherService.deleteSubject(req.user.profileId, subjectId);
     }
+    getArchivedSubjects(req) {
+        return this.teacherService.getArchivedSubjects(req.user.profileId);
+    }
+    restoreSubject(req, subjectId) {
+        return this.teacherService.restoreSubject(req.user.profileId, subjectId);
+    }
     getStudents(req) {
         return this.teacherService.getStudents(req.user.profileId);
     }
@@ -91,6 +97,9 @@ let TeacherController = class TeacherController {
     }
     removeStudentFromLesson(req, lessonId, studentId) {
         return this.teacherService.removeStudentFromLesson(req.user.profileId, lessonId, studentId);
+    }
+    updateLessonStudent(req, lessonId, studentId, body) {
+        return this.teacherService.updateLessonStudent(req.user.profileId, lessonId, studentId, body);
     }
     completeLesson(req, lessonId, body) {
         return this.teacherService.completeLesson(req.user.profileId, lessonId, body.students);
@@ -171,13 +180,30 @@ __decorate([
 ], TeacherController.prototype, "updateSubject", null);
 __decorate([
     (0, common_1.Delete)("me/subjects/:subjectId"),
-    (0, swagger_1.ApiOperation)({ summary: "Удалить предмет" }),
+    (0, swagger_1.ApiOperation)({ summary: "Удалить/архивировать предмет" }),
     __param(0, (0, common_1.Request)()),
     __param(1, (0, common_1.Param)("subjectId")),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", void 0)
 ], TeacherController.prototype, "deleteSubject", null);
+__decorate([
+    (0, common_1.Get)("me/subjects/archived"),
+    (0, swagger_1.ApiOperation)({ summary: "Получить архивированные предметы" }),
+    __param(0, (0, common_1.Request)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], TeacherController.prototype, "getArchivedSubjects", null);
+__decorate([
+    (0, common_1.Post)("me/subjects/:subjectId/restore"),
+    (0, swagger_1.ApiOperation)({ summary: "Восстановить архивированный предмет" }),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Param)("subjectId")),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], TeacherController.prototype, "restoreSubject", null);
 __decorate([
     (0, common_1.Get)("me/students"),
     (0, swagger_1.ApiOperation)({ summary: "Получить список учеников" }),
@@ -354,6 +380,17 @@ __decorate([
     __metadata("design:paramtypes", [Object, String, String]),
     __metadata("design:returntype", void 0)
 ], TeacherController.prototype, "removeStudentFromLesson", null);
+__decorate([
+    (0, common_1.Patch)("me/lessons/:lessonId/students/:studentId"),
+    (0, swagger_1.ApiOperation)({ summary: "Обновить данные ученика на уроке" }),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Param)("lessonId")),
+    __param(2, (0, common_1.Param)("studentId")),
+    __param(3, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, String, Object]),
+    __metadata("design:returntype", void 0)
+], TeacherController.prototype, "updateLessonStudent", null);
 __decorate([
     (0, common_1.Patch)("me/lessons/:lessonId/complete"),
     (0, swagger_1.ApiOperation)({ summary: "Отметить урок как проведённый" }),

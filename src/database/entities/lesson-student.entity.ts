@@ -53,3 +53,6 @@ export class LessonStudent {
   @JoinColumn({ name: "studentId" })
   student: StudentProfile;
 }
+
+
+

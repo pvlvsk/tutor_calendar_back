@@ -10,7 +10,7 @@ import {
   ForbiddenException,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository, MoreThanOrEqual, Between } from "typeorm";
+import { Repository, MoreThanOrEqual, Between, IsNull } from "typeorm";
 import { randomBytes } from "crypto";
 import {
   TeacherProfile,
@@ -111,13 +111,24 @@ export class TeacherService {
   // ============================================
 
   /**
-   * Получает список предметов учителя
+   * Получает список активных (неархивированных) предметов учителя
    */
   async getSubjects(teacherId: string) {
     return this.subjectRepo.find({
-      where: { teacherId },
+      where: { teacherId, archivedAt: IsNull() },
       order: { createdAt: "ASC" },
     });
+  }
+
+  /**
+   * Получает список архивированных предметов учителя
+   */
+  async getArchivedSubjects(teacherId: string) {
+    const subjects = await this.subjectRepo.find({
+      where: { teacherId },
+      order: { archivedAt: "DESC" },
+    });
+    return subjects.filter((s) => s.archivedAt !== null);
   }
 
   /**
@@ -225,7 +236,9 @@ export class TeacherService {
   }
 
   /**
-   * Удаляет предмет (если нет связанных уроков)
+   * Удаляет предмет:
+   * - Если нет уроков → полное удаление
+   * - Если есть уроки → архивация
    */
   async deleteSubject(teacherId: string, subjectId: string) {
     const subject = await this.subjectRepo.findOne({
@@ -234,9 +247,34 @@ export class TeacherService {
     if (!subject) throw new NotFoundException("SUBJECT_NOT_FOUND");
 
     const lessonsCount = await this.lessonRepo.count({ where: { subjectId } });
-    if (lessonsCount > 0) throw new ConflictException("SUBJECT_HAS_LESSONS");
 
+    if (lessonsCount > 0) {
+      // Есть уроки — архивируем
+      subject.archivedAt = new Date();
+      await this.subjectRepo.save(subject);
+      return { success: true, action: "archived", lessonsCount };
+    }
+
+    // Нет уроков — удаляем полностью
     await this.subjectRepo.delete({ id: subjectId });
+    return { success: true, action: "deleted" };
+  }
+
+  /**
+   * Восстанавливает архивированный предмет
+   */
+  async restoreSubject(teacherId: string, subjectId: string) {
+    const subject = await this.subjectRepo.findOne({
+      where: { id: subjectId, teacherId },
+    });
+    if (!subject) throw new NotFoundException("SUBJECT_NOT_FOUND");
+
+    if (!subject.archivedAt) {
+      throw new ConflictException("SUBJECT_NOT_ARCHIVED");
+    }
+
+    subject.archivedAt = null;
+    await this.subjectRepo.save(subject);
     return { success: true };
   }
 
@@ -765,11 +803,18 @@ export class TeacherService {
     data: any,
     applyToSeries?: string
   ) {
+    // DEBUG: логируем входящие данные
+    console.log(`[updateLesson] lessonId: ${lessonId}`);
+    console.log(`[updateLesson] applyToSeries: ${applyToSeries}`);
+    console.log(`[updateLesson] data:`, JSON.stringify(data, null, 2));
+
     const lesson = await this.lessonRepo.findOne({
       where: { id: lessonId, teacherId },
       relations: ["series"],
     });
     if (!lesson) throw new NotFoundException("LESSON_NOT_FOUND");
+
+    console.log(`[updateLesson] lesson.seriesId: ${lesson.seriesId}`);
 
     if (data.studentId !== undefined && data.studentId !== null) {
       const link = await this.linkRepo.findOne({
@@ -798,13 +843,14 @@ export class TeacherService {
 
     // Fields that can be applied to series (shared across all lessons)
     const seriesUpdateData: any = {};
-    if (data.studentId !== undefined)
-      seriesUpdateData.studentId = data.studentId;
     if (data.subjectId !== undefined)
       seriesUpdateData.subjectId = data.subjectId;
     if (data.durationMinutes !== undefined)
       seriesUpdateData.durationMinutes = data.durationMinutes;
+    if (data.isFree !== undefined) seriesUpdateData.isFree = data.isFree;
     if (data.priceRub !== undefined) seriesUpdateData.priceRub = data.priceRub;
+    // If isFree is true, set priceRub to 0
+    if (data.isFree === true) seriesUpdateData.priceRub = 0;
 
     // Fields that apply only to individual lesson
     const singleLessonData: any = { ...seriesUpdateData };
@@ -830,14 +876,20 @@ export class TeacherService {
       singleLessonData.studentNotePrivate = data.studentNotePrivate;
 
     if (applyToSeries && applyToSeries !== "this" && lesson.seriesId) {
+      console.log(`[updateLesson] Applying to series: ${applyToSeries}`);
+
       const whereClause: any = { seriesId: lesson.seriesId, teacherId };
       if (applyToSeries === "future") {
         whereClause.startAt = MoreThanOrEqual(lesson.startAt);
       }
+      console.log(`[updateLesson] whereClause:`, whereClause);
 
       // Apply only series-safe fields to all lessons in series
       if (Object.keys(seriesUpdateData).length > 0) {
+        console.log(`[updateLesson] seriesUpdateData:`, seriesUpdateData);
         await this.lessonRepo.update(whereClause, seriesUpdateData);
+      } else {
+        console.log(`[updateLesson] seriesUpdateData is empty`);
       }
 
       // Apply individual fields to current lesson only
@@ -857,15 +909,83 @@ export class TeacherService {
         await this.lessonRepo.update({ id: lessonId }, individualFields);
       }
 
-      // Update series record if student or subject changed
+      // Update series record if subject changed
       const seriesUpdate: any = {};
-      if (data.studentId !== undefined) seriesUpdate.studentId = data.studentId;
       if (data.subjectId !== undefined) seriesUpdate.subjectId = data.subjectId;
       if (Object.keys(seriesUpdate).length > 0) {
         await this.seriesRepo.update({ id: lesson.seriesId }, seriesUpdate);
       }
+
+      // Update students for all lessons in series if studentIds provided
+      if (data.studentIds && Array.isArray(data.studentIds)) {
+        console.log(
+          `[updateLesson] Updating students for series: ${data.studentIds}`
+        );
+
+        // Get all lessons in series that match the criteria
+        const lessonsToUpdate = await this.lessonRepo.find({
+          where: whereClause,
+        });
+        console.log(
+          `[updateLesson] Found ${lessonsToUpdate.length} lessons to update students`
+        );
+
+        const priceRub = data.isFree ? 0 : data.priceRub ?? lesson.priceRub;
+
+        for (const lessonToUpdate of lessonsToUpdate) {
+          // Delete existing lesson_student records for this lesson
+          await this.lessonStudentRepo.delete({ lessonId: lessonToUpdate.id });
+
+          // Create new lesson_student records for each student
+          for (const studentId of data.studentIds) {
+            const lessonStudent = this.lessonStudentRepo.create({
+              lessonId: lessonToUpdate.id,
+              studentId,
+              priceRub,
+            });
+            await this.lessonStudentRepo.save(lessonStudent);
+          }
+        }
+
+        // Also update lesson_series_student table
+        await this.seriesStudentRepo.delete({ seriesId: lesson.seriesId });
+        for (const studentId of data.studentIds) {
+          const seriesStudent = this.seriesStudentRepo.create({
+            seriesId: lesson.seriesId,
+            studentId,
+            priceRub,
+          });
+          await this.seriesStudentRepo.save(seriesStudent);
+        }
+
+        console.log(`[updateLesson] Students updated successfully`);
+      }
     } else {
       await this.lessonRepo.update({ id: lessonId }, singleLessonData);
+
+      // Update students for single lesson if studentIds provided
+      if (data.studentIds && Array.isArray(data.studentIds)) {
+        console.log(
+          `[updateLesson] Updating students for single lesson: ${data.studentIds}`
+        );
+
+        const priceRub = data.isFree ? 0 : data.priceRub ?? lesson.priceRub;
+
+        // Delete existing lesson_student records
+        await this.lessonStudentRepo.delete({ lessonId });
+
+        // Create new lesson_student records
+        for (const studentId of data.studentIds) {
+          const lessonStudent = this.lessonStudentRepo.create({
+            lessonId,
+            studentId,
+            priceRub,
+          });
+          await this.lessonStudentRepo.save(lessonStudent);
+        }
+
+        console.log(`[updateLesson] Students updated for single lesson`);
+      }
     }
 
     return this.getLessonWithDetails(lessonId);
@@ -1097,6 +1217,34 @@ export class TeacherService {
     await this.lessonStudentRepo.delete({ lessonId, studentId });
 
     return this.getLessonWithDetails(lessonId);
+  }
+
+  /**
+   * Обновляет данные ученика на уроке (например, статус оплаты)
+   */
+  async updateLessonStudent(
+    teacherId: string,
+    lessonId: string,
+    studentId: string,
+    data: { paymentStatus?: "paid" | "unpaid" }
+  ) {
+    const lesson = await this.lessonRepo.findOne({
+      where: { id: lessonId, teacherId },
+    });
+    if (!lesson) throw new NotFoundException("LESSON_NOT_FOUND");
+
+    const lessonStudent = await this.lessonStudentRepo.findOne({
+      where: { lessonId, studentId },
+    });
+    if (!lessonStudent) throw new NotFoundException("STUDENT_NOT_ON_LESSON");
+
+    if (data.paymentStatus !== undefined) {
+      lessonStudent.paymentStatus = data.paymentStatus;
+    }
+
+    await this.lessonStudentRepo.save(lessonStudent);
+
+    return { success: true, paymentStatus: lessonStudent.paymentStatus };
   }
 
   /**

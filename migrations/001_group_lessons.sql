@@ -59,3 +59,6 @@ ALTER TABLE lesson_series ADD COLUMN IF NOT EXISTS "isFree" BOOLEAN DEFAULT fals
 -- ALTER TABLE lesson_series DROP COLUMN IF EXISTS "studentId";
 
 SELECT 'Migration 001_group_lessons completed!' as result;
+
+
+

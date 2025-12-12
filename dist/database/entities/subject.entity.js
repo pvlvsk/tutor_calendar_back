@@ -18,7 +18,7 @@ let Subject = class Subject {
 };
 exports.Subject = Subject;
 __decorate([
-    (0, typeorm_1.PrimaryGeneratedColumn)('uuid'),
+    (0, typeorm_1.PrimaryGeneratedColumn)("uuid"),
     __metadata("design:type", String)
 ], Subject.prototype, "id", void 0);
 __decorate([
@@ -38,6 +38,10 @@ __decorate([
     __metadata("design:type", String)
 ], Subject.prototype, "colorHex", void 0);
 __decorate([
+    (0, typeorm_1.Column)({ type: "timestamp", nullable: true }),
+    __metadata("design:type", Object)
+], Subject.prototype, "archivedAt", void 0);
+__decorate([
     (0, typeorm_1.CreateDateColumn)(),
     __metadata("design:type", Date)
 ], Subject.prototype, "createdAt", void 0);
@@ -46,8 +50,10 @@ __decorate([
     __metadata("design:type", Date)
 ], Subject.prototype, "updatedAt", void 0);
 __decorate([
-    (0, typeorm_1.ManyToOne)(() => teacher_profile_entity_1.TeacherProfile, (teacher) => teacher.subjects, { onDelete: 'CASCADE' }),
-    (0, typeorm_1.JoinColumn)({ name: 'teacherId' }),
+    (0, typeorm_1.ManyToOne)(() => teacher_profile_entity_1.TeacherProfile, (teacher) => teacher.subjects, {
+        onDelete: "CASCADE",
+    }),
+    (0, typeorm_1.JoinColumn)({ name: "teacherId" }),
     __metadata("design:type", teacher_profile_entity_1.TeacherProfile)
 ], Subject.prototype, "teacher", void 0);
 __decorate([
@@ -59,7 +65,7 @@ __decorate([
     __metadata("design:type", Array)
 ], Subject.prototype, "lessonSeries", void 0);
 exports.Subject = Subject = __decorate([
-    (0, typeorm_1.Entity)('subjects'),
-    (0, typeorm_1.Unique)(['teacherId', 'code'])
+    (0, typeorm_1.Entity)("subjects"),
+    (0, typeorm_1.Unique)(["teacherId", "code"])
 ], Subject);
 //# sourceMappingURL=subject.entity.js.map
