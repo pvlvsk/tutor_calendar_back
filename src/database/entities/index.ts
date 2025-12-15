@@ -1,4 +1,5 @@
 export * from "./user.entity";
+export * from "./user-notification-settings.entity";
 export * from "./teacher-profile.entity";
 export * from "./student-profile.entity";
 export * from "./parent-profile.entity";

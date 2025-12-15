@@ -27,6 +27,7 @@ import {
 import { StatsService, DebtService } from "../shared";
 import { LessonFilters } from "../shared/types";
 import { generateInviteUrl, generateFallbackUrl } from "../shared/utils";
+import { BotService } from "../bot/bot.service";
 
 @Injectable()
 export class TeacherService {
@@ -52,7 +53,8 @@ export class TeacherService {
     @InjectRepository(StudentProfile)
     private studentProfileRepo: Repository<StudentProfile>,
     private statsService: StatsService,
-    private debtService: DebtService
+    private debtService: DebtService,
+    private botService: BotService
   ) {}
 
   // ============================================
@@ -419,7 +421,7 @@ export class TeacherService {
     return {
       invitationId: invitation.id,
       token,
-      inviteUrl: `https://t.me/your_bot?start=${token}`,
+      inviteUrl: generateInviteUrl(token),
       expiresAt: invitation.expiresAt.toISOString(),
     };
   }
@@ -448,7 +450,7 @@ export class TeacherService {
     return {
       invitationId: invitation.id,
       token,
-      inviteUrl: `https://t.me/your_bot?start=${token}`,
+      inviteUrl: generateInviteUrl(token),
       expiresAt: invitation.expiresAt.toISOString(),
     };
   }
@@ -614,6 +616,14 @@ export class TeacherService {
       });
       await this.lessonStudentRepo.save(lessonStudent);
     }
+
+    // Отправляем уведомления ученикам о новом уроке
+    await this.notifyStudentsAboutNewLesson(
+      teacherId,
+      studentIds,
+      subject.name,
+      new Date(data.startAt)
+    );
 
     return this.getLessonWithDetails(saved.id);
   }
@@ -932,6 +942,12 @@ export class TeacherService {
 
         const priceRub = data.isFree ? 0 : data.priceRub ?? lesson.priceRub;
 
+        // Get existing students from series BEFORE deleting
+        const existingSeriesStudents = await this.seriesStudentRepo.find({
+          where: { seriesId: lesson.seriesId },
+        });
+        const existingStudentIds = existingSeriesStudents.map(ss => ss.studentId);
+
         for (const lessonToUpdate of lessonsToUpdate) {
           // Delete existing lesson_student records for this lesson
           await this.lessonStudentRepo.delete({ lessonId: lessonToUpdate.id });
@@ -958,6 +974,27 @@ export class TeacherService {
           await this.seriesStudentRepo.save(seriesStudent);
         }
 
+        // Find NEW students (added, not existing before)
+        const newStudentIds = data.studentIds.filter(
+          (id: string) => !existingStudentIds.includes(id)
+        );
+
+        // Send notifications to new students
+        if (newStudentIds.length > 0) {
+          console.log(`[updateLesson] New students added to series: ${newStudentIds}`);
+          const subject = await this.subjectRepo.findOne({
+            where: { id: lesson.subjectId },
+          });
+          if (subject) {
+            await this.notifyStudentsAboutNewLesson(
+              teacherId,
+              newStudentIds,
+              subject.name,
+              lesson.startAt
+            );
+          }
+        }
+
         console.log(`[updateLesson] Students updated successfully`);
       }
     } else {
@@ -971,6 +1008,12 @@ export class TeacherService {
 
         const priceRub = data.isFree ? 0 : data.priceRub ?? lesson.priceRub;
 
+        // Get existing students BEFORE deleting
+        const existingLessonStudents = await this.lessonStudentRepo.find({
+          where: { lessonId },
+        });
+        const existingStudentIds = existingLessonStudents.map(ls => ls.studentId);
+
         // Delete existing lesson_student records
         await this.lessonStudentRepo.delete({ lessonId });
 
@@ -982,6 +1025,27 @@ export class TeacherService {
             priceRub,
           });
           await this.lessonStudentRepo.save(lessonStudent);
+        }
+
+        // Find NEW students (added, not existing before)
+        const newStudentIds = data.studentIds.filter(
+          (id: string) => !existingStudentIds.includes(id)
+        );
+
+        // Send notifications to new students
+        if (newStudentIds.length > 0) {
+          console.log(`[updateLesson] New students added: ${newStudentIds}`);
+          const subject = await this.subjectRepo.findOne({
+            where: { id: lesson.subjectId },
+          });
+          if (subject) {
+            await this.notifyStudentsAboutNewLesson(
+              teacherId,
+              newStudentIds,
+              subject.name,
+              lesson.startAt
+            );
+          }
         }
 
         console.log(`[updateLesson] Students updated for single lesson`);
@@ -1192,6 +1256,19 @@ export class TeacherService {
       priceRub: lesson.isFree ? 0 : priceRub ?? lesson.priceRub,
     });
     await this.lessonStudentRepo.save(lessonStudent);
+
+    // Отправляем уведомление ученику о добавлении на урок
+    const subject = await this.subjectRepo.findOne({
+      where: { id: lesson.subjectId },
+    });
+    if (subject) {
+      await this.notifyStudentsAboutNewLesson(
+        teacherId,
+        [studentId],
+        subject.name,
+        lesson.startAt
+      );
+    }
 
     return this.getLessonWithDetails(lessonId);
   }
@@ -1429,5 +1506,58 @@ export class TeacherService {
       lastName: user.lastName,
       username: user.username,
     };
+  }
+
+  /**
+   * Отправляет уведомления ученикам о создании нового урока
+   */
+  private async notifyStudentsAboutNewLesson(
+    teacherId: string,
+    studentIds: string[],
+    subjectName: string,
+    startAt: Date
+  ): Promise<void> {
+    if (studentIds.length === 0) return;
+
+    // Получаем учителя с user для имени и timezone
+    const teacher = await this.teacherProfileRepo.findOne({
+      where: { id: teacherId },
+      relations: ["user"],
+    });
+    const teacherName = teacher?.displayName || teacher?.user?.firstName || "Учитель";
+    
+    // Используем timezone учителя или Moscow по умолчанию
+    const timezone = teacher?.user?.timezone || "Europe/Moscow";
+
+    // Форматируем дату и время в timezone учителя
+    const dateStr = startAt.toLocaleDateString("ru-RU", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      timeZone: timezone,
+    });
+    const timeStr = startAt.toLocaleTimeString("ru-RU", {
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: timezone,
+    });
+
+    // Отправляем уведомление каждому ученику
+    for (const studentId of studentIds) {
+      const student = await this.studentProfileRepo.findOne({
+        where: { id: studentId },
+        relations: ["user"],
+      });
+
+      if (!student?.user) continue;
+
+      // Отправляем через BotService (он сам проверит настройки)
+      await this.botService.notifyLessonCreated(student.user.id, {
+        subject: subjectName,
+        date: dateStr,
+        time: timeStr,
+        teacherName,
+      });
+    }
   }
 }

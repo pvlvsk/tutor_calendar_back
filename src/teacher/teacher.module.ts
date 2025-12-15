@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { TeacherController } from "./teacher.controller";
 import { TeacherService } from "./teacher.service";
+import { BotModule } from "../bot/bot.module";
 import {
   TeacherProfile,
   StudentProfile,
@@ -29,6 +30,7 @@ import {
       Invitation,
       ParentStudentRelation,
     ]),
+    BotModule,
   ],
   controllers: [TeacherController],
   providers: [TeacherService],

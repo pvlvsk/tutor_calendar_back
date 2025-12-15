@@ -20,8 +20,9 @@ const crypto_1 = require("crypto");
 const entities_1 = require("../database/entities");
 const shared_1 = require("../shared");
 const utils_1 = require("../shared/utils");
+const bot_service_1 = require("../bot/bot.service");
 let TeacherService = class TeacherService {
-    constructor(teacherProfileRepo, subjectRepo, linkRepo, lessonRepo, seriesRepo, lessonStudentRepo, seriesStudentRepo, invitationRepo, parentRelationRepo, studentProfileRepo, statsService, debtService) {
+    constructor(teacherProfileRepo, subjectRepo, linkRepo, lessonRepo, seriesRepo, lessonStudentRepo, seriesStudentRepo, invitationRepo, parentRelationRepo, studentProfileRepo, statsService, debtService, botService) {
         this.teacherProfileRepo = teacherProfileRepo;
         this.subjectRepo = subjectRepo;
         this.linkRepo = linkRepo;
@@ -34,6 +35,7 @@ let TeacherService = class TeacherService {
         this.studentProfileRepo = studentProfileRepo;
         this.statsService = statsService;
         this.debtService = debtService;
+        this.botService = botService;
     }
     async getProfile(teacherId) {
         const profile = await this.teacherProfileRepo.findOne({
@@ -282,7 +284,7 @@ let TeacherService = class TeacherService {
         return {
             invitationId: invitation.id,
             token,
-            inviteUrl: `https://t.me/your_bot?start=${token}`,
+            inviteUrl: (0, utils_1.generateInviteUrl)(token),
             expiresAt: invitation.expiresAt.toISOString(),
         };
     }
@@ -305,7 +307,7 @@ let TeacherService = class TeacherService {
         return {
             invitationId: invitation.id,
             token,
-            inviteUrl: `https://t.me/your_bot?start=${token}`,
+            inviteUrl: (0, utils_1.generateInviteUrl)(token),
             expiresAt: invitation.expiresAt.toISOString(),
         };
     }
@@ -424,6 +426,7 @@ let TeacherService = class TeacherService {
             });
             await this.lessonStudentRepo.save(lessonStudent);
         }
+        await this.notifyStudentsAboutNewLesson(teacherId, studentIds, subject.name, new Date(data.startAt));
         return this.getLessonWithDetails(saved.id);
     }
     async createRecurringLessons(teacherId, data) {
@@ -679,6 +682,10 @@ let TeacherService = class TeacherService {
                 });
                 console.log(`[updateLesson] Found ${lessonsToUpdate.length} lessons to update students`);
                 const priceRub = data.isFree ? 0 : data.priceRub ?? lesson.priceRub;
+                const existingSeriesStudents = await this.seriesStudentRepo.find({
+                    where: { seriesId: lesson.seriesId },
+                });
+                const existingStudentIds = existingSeriesStudents.map(ss => ss.studentId);
                 for (const lessonToUpdate of lessonsToUpdate) {
                     await this.lessonStudentRepo.delete({ lessonId: lessonToUpdate.id });
                     for (const studentId of data.studentIds) {
@@ -699,6 +706,16 @@ let TeacherService = class TeacherService {
                     });
                     await this.seriesStudentRepo.save(seriesStudent);
                 }
+                const newStudentIds = data.studentIds.filter((id) => !existingStudentIds.includes(id));
+                if (newStudentIds.length > 0) {
+                    console.log(`[updateLesson] New students added to series: ${newStudentIds}`);
+                    const subject = await this.subjectRepo.findOne({
+                        where: { id: lesson.subjectId },
+                    });
+                    if (subject) {
+                        await this.notifyStudentsAboutNewLesson(teacherId, newStudentIds, subject.name, lesson.startAt);
+                    }
+                }
                 console.log(`[updateLesson] Students updated successfully`);
             }
         }
@@ -707,6 +724,10 @@ let TeacherService = class TeacherService {
             if (data.studentIds && Array.isArray(data.studentIds)) {
                 console.log(`[updateLesson] Updating students for single lesson: ${data.studentIds}`);
                 const priceRub = data.isFree ? 0 : data.priceRub ?? lesson.priceRub;
+                const existingLessonStudents = await this.lessonStudentRepo.find({
+                    where: { lessonId },
+                });
+                const existingStudentIds = existingLessonStudents.map(ls => ls.studentId);
                 await this.lessonStudentRepo.delete({ lessonId });
                 for (const studentId of data.studentIds) {
                     const lessonStudent = this.lessonStudentRepo.create({
@@ -715,6 +736,16 @@ let TeacherService = class TeacherService {
                         priceRub,
                     });
                     await this.lessonStudentRepo.save(lessonStudent);
+                }
+                const newStudentIds = data.studentIds.filter((id) => !existingStudentIds.includes(id));
+                if (newStudentIds.length > 0) {
+                    console.log(`[updateLesson] New students added: ${newStudentIds}`);
+                    const subject = await this.subjectRepo.findOne({
+                        where: { id: lesson.subjectId },
+                    });
+                    if (subject) {
+                        await this.notifyStudentsAboutNewLesson(teacherId, newStudentIds, subject.name, lesson.startAt);
+                    }
                 }
                 console.log(`[updateLesson] Students updated for single lesson`);
             }
@@ -877,6 +908,12 @@ let TeacherService = class TeacherService {
             priceRub: lesson.isFree ? 0 : priceRub ?? lesson.priceRub,
         });
         await this.lessonStudentRepo.save(lessonStudent);
+        const subject = await this.subjectRepo.findOne({
+            where: { id: lesson.subjectId },
+        });
+        if (subject) {
+            await this.notifyStudentsAboutNewLesson(teacherId, [studentId], subject.name, lesson.startAt);
+        }
         return this.getLessonWithDetails(lessonId);
     }
     async removeStudentFromLesson(teacherId, lessonId, studentId) {
@@ -1059,6 +1096,41 @@ let TeacherService = class TeacherService {
             username: user.username,
         };
     }
+    async notifyStudentsAboutNewLesson(teacherId, studentIds, subjectName, startAt) {
+        if (studentIds.length === 0)
+            return;
+        const teacher = await this.teacherProfileRepo.findOne({
+            where: { id: teacherId },
+            relations: ["user"],
+        });
+        const teacherName = teacher?.displayName || teacher?.user?.firstName || "Учитель";
+        const timezone = teacher?.user?.timezone || "Europe/Moscow";
+        const dateStr = startAt.toLocaleDateString("ru-RU", {
+            weekday: "short",
+            day: "numeric",
+            month: "short",
+            timeZone: timezone,
+        });
+        const timeStr = startAt.toLocaleTimeString("ru-RU", {
+            hour: "2-digit",
+            minute: "2-digit",
+            timeZone: timezone,
+        });
+        for (const studentId of studentIds) {
+            const student = await this.studentProfileRepo.findOne({
+                where: { id: studentId },
+                relations: ["user"],
+            });
+            if (!student?.user)
+                continue;
+            await this.botService.notifyLessonCreated(student.user.id, {
+                subject: subjectName,
+                date: dateStr,
+                time: timeStr,
+                teacherName,
+            });
+        }
+    }
 };
 exports.TeacherService = TeacherService;
 exports.TeacherService = TeacherService = __decorate([
@@ -1084,6 +1156,7 @@ exports.TeacherService = TeacherService = __decorate([
         typeorm_2.Repository,
         typeorm_2.Repository,
         shared_1.StatsService,
-        shared_1.DebtService])
+        shared_1.DebtService,
+        bot_service_1.BotService])
 ], TeacherService);
 //# sourceMappingURL=teacher.service.js.map

@@ -47,10 +47,12 @@ export function getBotUsername(): string {
 
 /**
  * Генерирует ссылку на Mini App
+ * Формат без /app работает с основным Mini App бота (через Menu Button)
  */
 export function generateInviteUrl(code: string): string {
   const bot = getBotUsername();
-  return `https://t.me/${bot}/app?startapp=${code}`;
+  // Используем формат ?startapp= для основного Mini App бота
+  return `https://t.me/${bot}?startapp=${code}`;
 }
 
 /**

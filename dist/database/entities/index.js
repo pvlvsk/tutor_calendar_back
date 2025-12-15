@@ -15,6 +15,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 __exportStar(require("./user.entity"), exports);
+__exportStar(require("./user-notification-settings.entity"), exports);
 __exportStar(require("./teacher-profile.entity"), exports);
 __exportStar(require("./student-profile.entity"), exports);
 __exportStar(require("./parent-profile.entity"), exports);

@@ -14,15 +14,16 @@ const typeorm_1 = require("typeorm");
 const teacher_profile_entity_1 = require("./teacher-profile.entity");
 const student_profile_entity_1 = require("./student-profile.entity");
 const parent_profile_entity_1 = require("./parent-profile.entity");
+const user_notification_settings_entity_1 = require("./user-notification-settings.entity");
 let User = class User {
 };
 exports.User = User;
 __decorate([
-    (0, typeorm_1.PrimaryGeneratedColumn)('uuid'),
+    (0, typeorm_1.PrimaryGeneratedColumn)("uuid"),
     __metadata("design:type", String)
 ], User.prototype, "id", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ type: 'bigint', unique: true }),
+    (0, typeorm_1.Column)({ type: "bigint", unique: true }),
     __metadata("design:type", String)
 ], User.prototype, "telegramId", void 0);
 __decorate([
@@ -69,7 +70,11 @@ __decorate([
     (0, typeorm_1.OneToOne)(() => parent_profile_entity_1.ParentProfile, (profile) => profile.user),
     __metadata("design:type", parent_profile_entity_1.ParentProfile)
 ], User.prototype, "parentProfile", void 0);
+__decorate([
+    (0, typeorm_1.OneToOne)(() => user_notification_settings_entity_1.UserNotificationSettings, (settings) => settings.user),
+    __metadata("design:type", user_notification_settings_entity_1.UserNotificationSettings)
+], User.prototype, "notificationSettings", void 0);
 exports.User = User = __decorate([
-    (0, typeorm_1.Entity)('users')
+    (0, typeorm_1.Entity)("users")
 ], User);
 //# sourceMappingURL=user.entity.js.map

@@ -28,7 +28,7 @@ function getBotUsername() {
 }
 function generateInviteUrl(code) {
     const bot = getBotUsername();
-    return `https://t.me/${bot}/app?startapp=${code}`;
+    return `https://t.me/${bot}?startapp=${code}`;
 }
 function generateFallbackUrl(code) {
     const bot = getBotUsername();

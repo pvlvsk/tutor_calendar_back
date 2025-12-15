@@ -225,8 +225,8 @@ export class AuthService {
       throw new UnauthorizedException("USER_NOT_FOUND");
     }
 
-    const roles = this.getUserRoles(user);
-    if (roles.includes(role)) {
+    const existingRoles = this.getUserRoles(user);
+    if (existingRoles.includes(role)) {
       throw new ConflictException("ROLE_EXISTS");
     }
 
@@ -237,12 +237,18 @@ export class AuthService {
       username: user.username || undefined,
     });
 
+    // Обновляем user с новым профилем для генерации токена
+    const updatedUser = { ...user, [`${role}Profile`]: profile };
+    const newRoles = [...existingRoles, role];
+    const token = this.generateToken(updatedUser, role);
+
+    this.logger.log(`AddRole: userId=${userId} role=${role}`);
+
     return {
       user: this.formatUser(user),
-      roles: [...roles, role],
-      newRole: role,
-      profile: this.formatProfile(profile, role),
-      message: `Роль '${role}' успешно добавлена`,
+      roles: newRoles,
+      currentRole: role,
+      token,
     };
   }
 

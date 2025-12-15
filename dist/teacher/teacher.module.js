@@ -11,6 +11,7 @@ const common_1 = require("@nestjs/common");
 const typeorm_1 = require("@nestjs/typeorm");
 const teacher_controller_1 = require("./teacher.controller");
 const teacher_service_1 = require("./teacher.service");
+const bot_module_1 = require("../bot/bot.module");
 const entities_1 = require("../database/entities");
 let TeacherModule = class TeacherModule {
 };
@@ -30,6 +31,7 @@ exports.TeacherModule = TeacherModule = __decorate([
                 entities_1.Invitation,
                 entities_1.ParentStudentRelation,
             ]),
+            bot_module_1.BotModule,
         ],
         controllers: [teacher_controller_1.TeacherController],
         providers: [teacher_service_1.TeacherService],

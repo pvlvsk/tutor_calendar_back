@@ -1,14 +1,22 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, OneToOne } from 'typeorm';
-import { TeacherProfile } from './teacher-profile.entity';
-import { StudentProfile } from './student-profile.entity';
-import { ParentProfile } from './parent-profile.entity';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  OneToOne,
+} from "typeorm";
+import { TeacherProfile } from "./teacher-profile.entity";
+import { StudentProfile } from "./student-profile.entity";
+import { ParentProfile } from "./parent-profile.entity";
+import { UserNotificationSettings } from "./user-notification-settings.entity";
 
-@Entity('users')
+@Entity("users")
 export class User {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn("uuid")
   id: string;
 
-  @Column({ type: 'bigint', unique: true })
+  @Column({ type: "bigint", unique: true })
   telegramId: string;
 
   @Column({ nullable: true })
@@ -43,5 +51,7 @@ export class User {
 
   @OneToOne(() => ParentProfile, (profile) => profile.user)
   parentProfile: ParentProfile;
-}
 
+  @OneToOne(() => UserNotificationSettings, (settings) => settings.user)
+  notificationSettings: UserNotificationSettings;
+}

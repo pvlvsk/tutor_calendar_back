@@ -2,6 +2,7 @@ import { Repository } from "typeorm";
 import { TeacherProfile, StudentProfile, Subject, TeacherStudentLink, Lesson, LessonSeries, LessonStudent, LessonSeriesStudent, Invitation, ParentStudentRelation } from "../database/entities";
 import { StatsService, DebtService } from "../shared";
 import { LessonFilters } from "../shared/types";
+import { BotService } from "../bot/bot.service";
 export declare class TeacherService {
     private teacherProfileRepo;
     private subjectRepo;
@@ -15,7 +16,8 @@ export declare class TeacherService {
     private studentProfileRepo;
     private statsService;
     private debtService;
-    constructor(teacherProfileRepo: Repository<TeacherProfile>, subjectRepo: Repository<Subject>, linkRepo: Repository<TeacherStudentLink>, lessonRepo: Repository<Lesson>, seriesRepo: Repository<LessonSeries>, lessonStudentRepo: Repository<LessonStudent>, seriesStudentRepo: Repository<LessonSeriesStudent>, invitationRepo: Repository<Invitation>, parentRelationRepo: Repository<ParentStudentRelation>, studentProfileRepo: Repository<StudentProfile>, statsService: StatsService, debtService: DebtService);
+    private botService;
+    constructor(teacherProfileRepo: Repository<TeacherProfile>, subjectRepo: Repository<Subject>, linkRepo: Repository<TeacherStudentLink>, lessonRepo: Repository<Lesson>, seriesRepo: Repository<LessonSeries>, lessonStudentRepo: Repository<LessonStudent>, seriesStudentRepo: Repository<LessonSeriesStudent>, invitationRepo: Repository<Invitation>, parentRelationRepo: Repository<ParentStudentRelation>, studentProfileRepo: Repository<StudentProfile>, statsService: StatsService, debtService: DebtService, botService: BotService);
     getProfile(teacherId: string): Promise<{
         id: string;
         displayName: string;
@@ -543,4 +545,5 @@ export declare class TeacherService {
     private formatLessonWithStudents;
     private formatLesson;
     private formatUserInfo;
+    private notifyStudentsAboutNewLesson;
 }
