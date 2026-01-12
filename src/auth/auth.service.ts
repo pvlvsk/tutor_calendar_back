@@ -32,6 +32,7 @@ import {
   formatFullName,
   getBotUsername,
 } from "../shared/utils";
+import { BotService } from "../bot/bot.service";
 
 type UserRole = "teacher" | "student" | "parent";
 
@@ -70,7 +71,8 @@ export class AuthService {
     @InjectRepository(ParentStudentRelation)
     private parentStudentRelationRepository: Repository<ParentStudentRelation>,
     private jwtService: JwtService,
-    private telegramService: TelegramService
+    private telegramService: TelegramService,
+    private botService: BotService
   ) {}
 
   // ============================================
@@ -169,6 +171,11 @@ export class AuthService {
     this.logger.log(
       `Register: tg=${telegramUser.id} role=${role} userId=${user.id}`
     );
+
+    // Отправляем приветственное уведомление
+    this.botService.notifyUserWelcome(telegramUser.id, role).catch((err) => {
+      this.logger.warn(`Failed to send welcome notification: ${err.message}`);
+    });
 
     return {
       user: this.formatUser(user),
@@ -599,6 +606,26 @@ export class AuthService {
       `JoinTeacher: tg=${telegramUser.id} linked to teacher=${teacher.id}`
     );
 
+    // Отправляем приветственное уведомление ученику
+    this.botService
+      .notifyUserWelcome(telegramUser.id, "student", teacher.displayName)
+      .catch((err) => {
+        this.logger.warn(`Failed to send welcome notification: ${err.message}`);
+      });
+
+    // Уведомляем учителя о новом ученике
+    if (teacher.user?.telegramId) {
+      const studentName = formatFullName(
+        telegramUser.first_name,
+        telegramUser.last_name
+      );
+      this.botService
+        .notifyTeacherNewStudent(teacher.user.telegramId, studentName || "Новый ученик")
+        .catch((err) => {
+          this.logger.warn(`Failed to notify teacher: ${err.message}`);
+        });
+    }
+
     const botUsername = getBotUsername();
     return {
       user: this.formatUser(user),
@@ -659,6 +686,11 @@ export class AuthService {
     this.logger.log(
       `JoinAsParent: tg=${telegramUser.id} linked to student=${student.id}`
     );
+
+    // Отправляем приветственное уведомление родителю
+    this.botService.notifyUserWelcome(telegramUser.id, "parent").catch((err) => {
+      this.logger.warn(`Failed to send welcome notification: ${err.message}`);
+    });
 
     return {
       user: this.formatUser(user),

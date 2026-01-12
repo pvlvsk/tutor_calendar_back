@@ -219,12 +219,11 @@ export class BotService {
     telegramId: string | number,
     text: string,
     buttonText: string = "Открыть",
-    startParam?: string
+    startParam: string = "open"
   ): Promise<boolean> {
     const botUsername = process.env.BOT_USERNAME || "your_bot";
-    const url = startParam
-      ? `https://t.me/${botUsername}?startapp=${startParam}`
-      : `https://t.me/${botUsername}`;
+    // Всегда используем startapp для открытия Mini App
+    const url = `https://t.me/${botUsername}?startapp=${startParam}`;
 
     return this.sendMessage(telegramId, text, {
       replyMarkup: {
@@ -407,6 +406,87 @@ export class BotService {
 
     // Также уведомляем учителя (если у него включены напоминания)
     // TODO: Добавить логику для учителя если нужно
+  }
+
+  // ============================================
+  // ПРИВЕТСТВЕННЫЕ УВЕДОМЛЕНИЯ
+  // ============================================
+
+  /**
+   * Отправляет приветственное сообщение при регистрации
+   */
+  async notifyUserWelcome(
+    telegramId: string | number,
+    role: 'teacher' | 'student' | 'parent',
+    teacherName?: string
+  ): Promise<boolean> {
+    if (!this.isConfigured()) {
+      this.logger.warn("Bot token not configured, skipping welcome message");
+      return false;
+    }
+
+    let text = '';
+    let buttonText = '📱 Открыть приложение';
+
+    switch (role) {
+      case 'teacher':
+        text = 
+          `🎉 <b>Добро пожаловать!</b>\n\n` +
+          `Вы успешно зарегистрировались как <b>репетитор</b>.\n\n` +
+          `Теперь вы можете:\n` +
+          `📚 Управлять расписанием\n` +
+          `👨‍🎓 Добавлять учеников\n` +
+          `💰 Отслеживать оплаты\n` +
+          `📊 Смотреть статистику`;
+        break;
+      
+      case 'student':
+        text = 
+          `🎉 <b>Добро пожаловать!</b>\n\n` +
+          `Вы успешно зарегистрировались как <b>ученик</b>` +
+          (teacherName ? ` у репетитора <b>${teacherName}</b>` : '') + `.\n\n` +
+          `Теперь вы можете:\n` +
+          `📅 Просматривать расписание\n` +
+          `📊 Следить за статистикой\n` +
+          `👨‍👩‍👧 Пригласить родителя`;
+        buttonText = '📅 Открыть расписание';
+        break;
+      
+      case 'parent':
+        text = 
+          `🎉 <b>Добро пожаловать!</b>\n\n` +
+          `Вы успешно зарегистрировались как <b>родитель</b>.\n\n` +
+          `Теперь вы можете:\n` +
+          `📅 Просматривать расписание ребёнка\n` +
+          `📊 Следить за успеваемостью\n` +
+          `🔔 Получать уведомления о занятиях`;
+        buttonText = '👨‍👩‍👧 Открыть';
+        break;
+    }
+
+    return this.sendMessageWithMiniApp(telegramId, text, buttonText);
+  }
+
+  /**
+   * Уведомление учителю о новом ученике
+   */
+  async notifyTeacherNewStudent(
+    teacherTelegramId: string | number,
+    studentName: string
+  ): Promise<boolean> {
+    if (!this.isConfigured()) {
+      return false;
+    }
+
+    const text = 
+      `👨‍🎓 <b>Новый ученик!</b>\n\n` +
+      `<b>${studentName}</b> присоединился к вам по ссылке-приглашению.`;
+
+    return this.sendMessageWithMiniApp(
+      teacherTelegramId,
+      text,
+      '👥 Открыть список учеников'
+    );
   }
 
   // ============================================

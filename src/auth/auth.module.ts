@@ -6,6 +6,7 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './jwt.strategy';
 import { TelegramService } from './telegram.service';
+import { BotModule } from '../bot/bot.module';
 import {
   User,
   TeacherProfile,
@@ -32,6 +33,7 @@ import {
       TeacherStudentLink,
       ParentStudentRelation,
     ]),
+    BotModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, TelegramService],
