@@ -87,15 +87,8 @@ export declare class AuthController {
             isBetaTester: boolean;
         };
         roles: ("teacher" | "student" | "parent")[];
-        newRole: "teacher" | "student" | "parent";
-        profile: {
-            id: any;
-            displayName: any;
-        } | {
-            id: any;
-            displayName?: undefined;
-        };
-        message: string;
+        currentRole: "teacher" | "student" | "parent";
+        token: string;
     }>;
     acceptInvitation(req: any, dto: AcceptInvitationDto): Promise<{
         user: {

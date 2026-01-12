@@ -48,6 +48,9 @@ export class LessonSeries {
   @Column({ default: false })
   isFree: boolean;
 
+  @Column({ nullable: true })
+  meetingUrl: string;
+
   @CreateDateColumn()
   createdAt: Date;
 

@@ -156,6 +156,7 @@ export declare class TeacherController {
         studentNotePrivate: string;
         studentNoteForTeacher: string;
         reminderMinutesBefore: number;
+        meetingUrl: string;
         createdAt: string;
         updatedAt: string;
         students: {
@@ -193,6 +194,7 @@ export declare class TeacherController {
         studentNotePrivate: string;
         studentNoteForTeacher: string;
         reminderMinutesBefore: number;
+        meetingUrl: string;
         createdAt: string;
         updatedAt: string;
         students: {
@@ -250,6 +252,7 @@ export declare class TeacherController {
         studentNotePrivate: string;
         studentNoteForTeacher: string;
         reminderMinutesBefore: number;
+        meetingUrl: string;
         createdAt: string;
         updatedAt: string;
         students: {
@@ -287,6 +290,7 @@ export declare class TeacherController {
         studentNotePrivate: string;
         studentNoteForTeacher: string;
         reminderMinutesBefore: number;
+        meetingUrl: string;
         createdAt: string;
         updatedAt: string;
         students: {
@@ -341,6 +345,7 @@ export declare class TeacherController {
         studentNotePrivate: string;
         studentNoteForTeacher: string;
         reminderMinutesBefore: number;
+        meetingUrl: string;
         createdAt: string;
         updatedAt: string;
         students: {
@@ -378,6 +383,7 @@ export declare class TeacherController {
         studentNotePrivate: string;
         studentNoteForTeacher: string;
         reminderMinutesBefore: number;
+        meetingUrl: string;
         createdAt: string;
         updatedAt: string;
         students: {
@@ -428,6 +434,7 @@ export declare class TeacherController {
         studentNotePrivate: string;
         studentNoteForTeacher: string;
         reminderMinutesBefore: number;
+        meetingUrl: string;
         createdAt: string;
         updatedAt: string;
         students: {
@@ -468,6 +475,7 @@ export declare class TeacherController {
         studentNotePrivate: string;
         studentNoteForTeacher: string;
         reminderMinutesBefore: number;
+        meetingUrl: string;
         createdAt: string;
         updatedAt: string;
         students: {

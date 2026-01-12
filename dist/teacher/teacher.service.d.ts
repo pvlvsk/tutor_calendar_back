@@ -169,6 +169,7 @@ export declare class TeacherService {
         studentNotePrivate: string;
         studentNoteForTeacher: string;
         reminderMinutesBefore: number;
+        meetingUrl: string;
         createdAt: string;
         updatedAt: string;
         students: {
@@ -213,6 +214,7 @@ export declare class TeacherService {
         studentNotePrivate: string;
         studentNoteForTeacher: string;
         reminderMinutesBefore: number;
+        meetingUrl: string;
         createdAt: string;
         updatedAt: string;
         students: {
@@ -250,6 +252,7 @@ export declare class TeacherService {
         studentNotePrivate: string;
         studentNoteForTeacher: string;
         reminderMinutesBefore: number;
+        meetingUrl: string;
         createdAt: string;
         updatedAt: string;
         students: {
@@ -302,6 +305,7 @@ export declare class TeacherService {
         studentNotePrivate: string;
         studentNoteForTeacher: string;
         reminderMinutesBefore: number;
+        meetingUrl: string;
         createdAt: string;
         updatedAt: string;
         students: {
@@ -401,6 +405,7 @@ export declare class TeacherService {
         studentNotePrivate: string;
         studentNoteForTeacher: string;
         reminderMinutesBefore: number;
+        meetingUrl: string;
         createdAt: string;
         updatedAt: string;
         students: {
@@ -438,6 +443,7 @@ export declare class TeacherService {
         studentNotePrivate: string;
         studentNoteForTeacher: string;
         reminderMinutesBefore: number;
+        meetingUrl: string;
         createdAt: string;
         updatedAt: string;
         students: {
@@ -486,6 +492,7 @@ export declare class TeacherService {
         studentNotePrivate: string;
         studentNoteForTeacher: string;
         reminderMinutesBefore: number;
+        meetingUrl: string;
         createdAt: string;
         updatedAt: string;
         students: {
@@ -523,6 +530,7 @@ export declare class TeacherService {
         studentNotePrivate: string;
         studentNoteForTeacher: string;
         reminderMinutesBefore: number;
+        meetingUrl: string;
         createdAt: string;
         updatedAt: string;
         students: {

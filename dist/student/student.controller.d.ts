@@ -83,6 +83,7 @@ export declare class StudentController {
         studentNotePrivate: string;
         studentNoteForTeacher: string;
         reminderMinutesBefore: number;
+        meetingUrl: string;
         isGroupLesson: boolean;
         totalStudentsCount: number;
         otherStudentsCount: number;
@@ -111,6 +112,7 @@ export declare class StudentController {
         studentNotePrivate: string;
         studentNoteForTeacher: string;
         reminderMinutesBefore: number;
+        meetingUrl: string;
         isGroupLesson: boolean;
         totalStudentsCount: number;
         otherStudentsCount: number;
@@ -142,6 +144,7 @@ export declare class StudentController {
         studentNotePrivate: string;
         studentNoteForTeacher: string;
         reminderMinutesBefore: number;
+        meetingUrl: string;
         isGroupLesson: boolean;
         totalStudentsCount: number;
         otherStudentsCount: number;
@@ -173,6 +176,7 @@ export declare class StudentController {
         studentNotePrivate: string;
         studentNoteForTeacher: string;
         reminderMinutesBefore: number;
+        meetingUrl: string;
         isGroupLesson: boolean;
         totalStudentsCount: number;
         otherStudentsCount: number;

@@ -605,6 +605,7 @@ export class TeacherService {
       isFree,
       teacherNote: data.teacherNote,
       reminderMinutesBefore: data.reminderMinutesBefore,
+      meetingUrl: data.meetingUrl,
     });
     const saved = await this.lessonRepo.save(lesson);
 
@@ -622,7 +623,8 @@ export class TeacherService {
       teacherId,
       studentIds,
       subject.name,
-      new Date(data.startAt)
+      new Date(data.startAt),
+      data.meetingUrl
     );
 
     return this.getLessonWithDetails(saved.id);
@@ -650,6 +652,7 @@ export class TeacherService {
     series.priceRub = priceRub;
     series.isFree = isFree;
     series.maxOccurrences = data.recurrence.count || 10;
+    series.meetingUrl = data.meetingUrl;
     if (data.recurrence.endDate) {
       series.endDate = new Date(data.recurrence.endDate);
     }
@@ -685,6 +688,7 @@ export class TeacherService {
         isFree,
         teacherNote: data.teacherNote,
         reminderMinutesBefore: data.reminderMinutesBefore,
+        meetingUrl: data.meetingUrl,
       });
       await this.lessonRepo.save(lesson);
 
@@ -859,6 +863,7 @@ export class TeacherService {
       seriesUpdateData.durationMinutes = data.durationMinutes;
     if (data.isFree !== undefined) seriesUpdateData.isFree = data.isFree;
     if (data.priceRub !== undefined) seriesUpdateData.priceRub = data.priceRub;
+    if (data.meetingUrl !== undefined) seriesUpdateData.meetingUrl = data.meetingUrl;
     // If isFree is true, set priceRub to 0
     if (data.isFree === true) seriesUpdateData.priceRub = 0;
 
@@ -990,7 +995,8 @@ export class TeacherService {
               teacherId,
               newStudentIds,
               subject.name,
-              lesson.startAt
+              lesson.startAt,
+              data.meetingUrl ?? lesson.meetingUrl
             );
           }
         }
@@ -1043,7 +1049,8 @@ export class TeacherService {
               teacherId,
               newStudentIds,
               subject.name,
-              lesson.startAt
+              lesson.startAt,
+              data.meetingUrl ?? lesson.meetingUrl
             );
           }
         }
@@ -1266,7 +1273,8 @@ export class TeacherService {
         teacherId,
         [studentId],
         subject.name,
-        lesson.startAt
+        lesson.startAt,
+        lesson.meetingUrl
       );
     }
 
@@ -1453,6 +1461,7 @@ export class TeacherService {
       studentNotePrivate: lesson.studentNotePrivate,
       studentNoteForTeacher: lesson.studentNoteForTeacher,
       reminderMinutesBefore: lesson.reminderMinutesBefore,
+      meetingUrl: lesson.meetingUrl,
       createdAt: lesson.createdAt.toISOString(),
       updatedAt: lesson.updatedAt.toISOString(),
       students: (lesson.lessonStudents || []).map((ls) => ({
@@ -1494,6 +1503,7 @@ export class TeacherService {
       studentNotePrivate: lesson.studentNotePrivate,
       studentNoteForTeacher: lesson.studentNoteForTeacher,
       reminderMinutesBefore: lesson.reminderMinutesBefore,
+      meetingUrl: lesson.meetingUrl,
       createdAt: lesson.createdAt.toISOString(),
       updatedAt: lesson.updatedAt.toISOString(),
     };
@@ -1515,7 +1525,8 @@ export class TeacherService {
     teacherId: string,
     studentIds: string[],
     subjectName: string,
-    startAt: Date
+    startAt: Date,
+    meetingUrl?: string
   ): Promise<void> {
     if (studentIds.length === 0) return;
 
@@ -1557,6 +1568,7 @@ export class TeacherService {
         date: dateStr,
         time: timeStr,
         teacherName,
+        meetingUrl,
       });
     }
   }

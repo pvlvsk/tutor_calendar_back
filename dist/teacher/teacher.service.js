@@ -416,6 +416,7 @@ let TeacherService = class TeacherService {
             isFree,
             teacherNote: data.teacherNote,
             reminderMinutesBefore: data.reminderMinutesBefore,
+            meetingUrl: data.meetingUrl,
         });
         const saved = await this.lessonRepo.save(lesson);
         for (const studentId of studentIds) {
@@ -426,7 +427,7 @@ let TeacherService = class TeacherService {
             });
             await this.lessonStudentRepo.save(lessonStudent);
         }
-        await this.notifyStudentsAboutNewLesson(teacherId, studentIds, subject.name, new Date(data.startAt));
+        await this.notifyStudentsAboutNewLesson(teacherId, studentIds, subject.name, new Date(data.startAt), data.meetingUrl);
         return this.getLessonWithDetails(saved.id);
     }
     async createRecurringLessons(teacherId, data) {
@@ -446,6 +447,7 @@ let TeacherService = class TeacherService {
         series.priceRub = priceRub;
         series.isFree = isFree;
         series.maxOccurrences = data.recurrence.count || 10;
+        series.meetingUrl = data.meetingUrl;
         if (data.recurrence.endDate) {
             series.endDate = new Date(data.recurrence.endDate);
         }
@@ -478,6 +480,7 @@ let TeacherService = class TeacherService {
                 isFree,
                 teacherNote: data.teacherNote,
                 reminderMinutesBefore: data.reminderMinutesBefore,
+                meetingUrl: data.meetingUrl,
             });
             await this.lessonRepo.save(lesson);
             for (const studentId of studentIds) {
@@ -615,6 +618,8 @@ let TeacherService = class TeacherService {
             seriesUpdateData.isFree = data.isFree;
         if (data.priceRub !== undefined)
             seriesUpdateData.priceRub = data.priceRub;
+        if (data.meetingUrl !== undefined)
+            seriesUpdateData.meetingUrl = data.meetingUrl;
         if (data.isFree === true)
             seriesUpdateData.priceRub = 0;
         const singleLessonData = { ...seriesUpdateData };
@@ -713,7 +718,7 @@ let TeacherService = class TeacherService {
                         where: { id: lesson.subjectId },
                     });
                     if (subject) {
-                        await this.notifyStudentsAboutNewLesson(teacherId, newStudentIds, subject.name, lesson.startAt);
+                        await this.notifyStudentsAboutNewLesson(teacherId, newStudentIds, subject.name, lesson.startAt, data.meetingUrl ?? lesson.meetingUrl);
                     }
                 }
                 console.log(`[updateLesson] Students updated successfully`);
@@ -744,7 +749,7 @@ let TeacherService = class TeacherService {
                         where: { id: lesson.subjectId },
                     });
                     if (subject) {
-                        await this.notifyStudentsAboutNewLesson(teacherId, newStudentIds, subject.name, lesson.startAt);
+                        await this.notifyStudentsAboutNewLesson(teacherId, newStudentIds, subject.name, lesson.startAt, data.meetingUrl ?? lesson.meetingUrl);
                     }
                 }
                 console.log(`[updateLesson] Students updated for single lesson`);
@@ -912,7 +917,7 @@ let TeacherService = class TeacherService {
             where: { id: lesson.subjectId },
         });
         if (subject) {
-            await this.notifyStudentsAboutNewLesson(teacherId, [studentId], subject.name, lesson.startAt);
+            await this.notifyStudentsAboutNewLesson(teacherId, [studentId], subject.name, lesson.startAt, lesson.meetingUrl);
         }
         return this.getLessonWithDetails(lessonId);
     }
@@ -1044,6 +1049,7 @@ let TeacherService = class TeacherService {
             studentNotePrivate: lesson.studentNotePrivate,
             studentNoteForTeacher: lesson.studentNoteForTeacher,
             reminderMinutesBefore: lesson.reminderMinutesBefore,
+            meetingUrl: lesson.meetingUrl,
             createdAt: lesson.createdAt.toISOString(),
             updatedAt: lesson.updatedAt.toISOString(),
             students: (lesson.lessonStudents || []).map((ls) => ({
@@ -1084,6 +1090,7 @@ let TeacherService = class TeacherService {
             studentNotePrivate: lesson.studentNotePrivate,
             studentNoteForTeacher: lesson.studentNoteForTeacher,
             reminderMinutesBefore: lesson.reminderMinutesBefore,
+            meetingUrl: lesson.meetingUrl,
             createdAt: lesson.createdAt.toISOString(),
             updatedAt: lesson.updatedAt.toISOString(),
         };
@@ -1096,7 +1103,7 @@ let TeacherService = class TeacherService {
             username: user.username,
         };
     }
-    async notifyStudentsAboutNewLesson(teacherId, studentIds, subjectName, startAt) {
+    async notifyStudentsAboutNewLesson(teacherId, studentIds, subjectName, startAt, meetingUrl) {
         if (studentIds.length === 0)
             return;
         const teacher = await this.teacherProfileRepo.findOne({
@@ -1128,6 +1135,7 @@ let TeacherService = class TeacherService {
                 date: dateStr,
                 time: timeStr,
                 teacherName,
+                meetingUrl,
             });
         }
     }

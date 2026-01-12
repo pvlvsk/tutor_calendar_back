@@ -69,6 +69,9 @@ export class Lesson {
   @Column({ nullable: true })
   reminderMinutesBefore: number;
 
+  @Column({ nullable: true })
+  meetingUrl: string;
+
   @CreateDateColumn()
   createdAt: Date;
 

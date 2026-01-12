@@ -145,8 +145,8 @@ let AuthService = AuthService_1 = class AuthService {
         if (!user) {
             throw new common_1.UnauthorizedException("USER_NOT_FOUND");
         }
-        const roles = this.getUserRoles(user);
-        if (roles.includes(role)) {
+        const existingRoles = this.getUserRoles(user);
+        if (existingRoles.includes(role)) {
             throw new common_1.ConflictException("ROLE_EXISTS");
         }
         const profile = await this.createProfile(userId, role, {
@@ -155,12 +155,15 @@ let AuthService = AuthService_1 = class AuthService {
             last_name: user.lastName || undefined,
             username: user.username || undefined,
         });
+        const updatedUser = { ...user, [`${role}Profile`]: profile };
+        const newRoles = [...existingRoles, role];
+        const token = this.generateToken(updatedUser, role);
+        this.logger.log(`AddRole: userId=${userId} role=${role}`);
         return {
             user: this.formatUser(user),
-            roles: [...roles, role],
-            newRole: role,
-            profile: this.formatProfile(profile, role),
-            message: `Роль '${role}' успешно добавлена`,
+            roles: newRoles,
+            currentRole: role,
+            token,
         };
     }
     async getMe(userId, role) {

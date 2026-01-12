@@ -21,6 +21,7 @@ export declare class Lesson {
     studentNotePrivate: string;
     studentNoteForTeacher: string;
     reminderMinutesBefore: number;
+    meetingUrl: string;
     createdAt: Date;
     updatedAt: Date;
     series: LessonSeries;

@@ -14,6 +14,7 @@ export declare class LessonSeries {
     durationMinutes: number;
     priceRub: number;
     isFree: boolean;
+    meetingUrl: string;
     createdAt: Date;
     updatedAt: Date;
     teacher: TeacherProfile;

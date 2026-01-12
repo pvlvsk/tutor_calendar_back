@@ -153,12 +153,15 @@ let BotService = BotService_1 = class BotService {
             this.logger.warn(`User not found: ${studentUserId}`);
             return false;
         }
-        const { subject, date, time, teacherName } = lessonInfo;
-        const text = `📚 <b>Новое занятие</b>\n\n` +
+        const { subject, date, time, teacherName, meetingUrl } = lessonInfo;
+        let text = `📚 <b>Новое занятие</b>\n\n` +
             `📖 Предмет: ${subject}\n` +
             `📅 Дата: ${date}\n` +
             `🕐 Время: ${time}\n` +
             `👨‍🏫 Учитель: ${teacherName}`;
+        if (meetingUrl) {
+            text += `\n🔗 <a href="${meetingUrl}">Ссылка на встречу</a>`;
+        }
         return this.sendMessageWithMiniApp(user.telegramId, text, "📅 Открыть расписание");
     }
     async sendLessonReminders() {
@@ -209,9 +212,12 @@ let BotService = BotService_1 = class BotService {
                 minute: "2-digit",
                 timeZone: timezone,
             });
-            const text = `⏰ <b>Напоминание</b>\n\n` +
+            let text = `⏰ <b>Напоминание</b>\n\n` +
                 `Занятие по <b>${lesson.subject?.name || "предмету"}</b> начнётся через 30 минут\n` +
                 `🕐 Время: ${timeStr}`;
+            if (lesson.meetingUrl) {
+                text += `\n🔗 <a href="${lesson.meetingUrl}">Присоединиться к встрече</a>`;
+            }
             await this.sendMessageWithMiniApp(ls.student.user.telegramId, text, "📚 Открыть");
             this.logger.log(`Reminder sent to student ${studentUserId} for lesson ${lesson.id}`);
         }

@@ -7,7 +7,12 @@ import { Injectable, Logger } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, LessThanOrEqual, MoreThan } from "typeorm";
 import { Cron, CronExpression } from "@nestjs/schedule";
-import { User, UserNotificationSettings, Lesson, LessonStudent } from "../database/entities";
+import {
+  User,
+  UserNotificationSettings,
+  Lesson,
+  LessonStudent,
+} from "../database/entities";
 import {
   NotificationEventType,
   NotificationSettingsResponse,
@@ -250,6 +255,7 @@ export class BotService {
       date: string;
       time: string;
       teacherName: string;
+      meetingUrl?: string;
     }
   ): Promise<boolean> {
     // Проверяем можно ли отправить
@@ -259,7 +265,9 @@ export class BotService {
     );
 
     if (!canSend) {
-      this.logger.debug(`Lesson created notification disabled for user ${studentUserId}`);
+      this.logger.debug(
+        `Lesson created notification disabled for user ${studentUserId}`
+      );
       return false;
     }
 
@@ -270,14 +278,18 @@ export class BotService {
       return false;
     }
 
-    const { subject, date, time, teacherName } = lessonInfo;
+    const { subject, date, time, teacherName, meetingUrl } = lessonInfo;
 
-    const text =
+    let text =
       `📚 <b>Новое занятие</b>\n\n` +
       `📖 Предмет: ${subject}\n` +
       `📅 Дата: ${date}\n` +
       `🕐 Время: ${time}\n` +
       `👨‍🏫 Учитель: ${teacherName}`;
+
+    if (meetingUrl) {
+      text += `\n🔗 <a href="${meetingUrl}">Ссылка на встречу</a>`;
+    }
 
     return this.sendMessageWithMiniApp(
       user.telegramId,
@@ -332,7 +344,9 @@ export class BotService {
         await this.sendReminderForLesson(lesson);
       }
     } catch (error) {
-      this.logger.error(`Error in sendLessonReminders: ${(error as Error).message}`);
+      this.logger.error(
+        `Error in sendLessonReminders: ${(error as Error).message}`
+      );
     }
   }
 
@@ -369,10 +383,16 @@ export class BotService {
         timeZone: timezone,
       });
 
-      const text =
+      let text =
         `⏰ <b>Напоминание</b>\n\n` +
-        `Занятие по <b>${lesson.subject?.name || "предмету"}</b> начнётся через 30 минут\n` +
+        `Занятие по <b>${
+          lesson.subject?.name || "предмету"
+        }</b> начнётся через 30 минут\n` +
         `🕐 Время: ${timeStr}`;
+
+      if (lesson.meetingUrl) {
+        text += `\n🔗 <a href="${lesson.meetingUrl}">Присоединиться к встрече</a>`;
+      }
 
       await this.sendMessageWithMiniApp(
         ls.student.user.telegramId,
@@ -380,7 +400,9 @@ export class BotService {
         "📚 Открыть"
       );
 
-      this.logger.log(`Reminder sent to student ${studentUserId} for lesson ${lesson.id}`);
+      this.logger.log(
+        `Reminder sent to student ${studentUserId} for lesson ${lesson.id}`
+      );
     }
 
     // Также уведомляем учителя (если у него включены напоминания)

@@ -91,6 +91,10 @@ __decorate([
     __metadata("design:type", Number)
 ], Lesson.prototype, "reminderMinutesBefore", void 0);
 __decorate([
+    (0, typeorm_1.Column)({ nullable: true }),
+    __metadata("design:type", String)
+], Lesson.prototype, "meetingUrl", void 0);
+__decorate([
     (0, typeorm_1.CreateDateColumn)(),
     __metadata("design:type", Date)
 ], Lesson.prototype, "createdAt", void 0);

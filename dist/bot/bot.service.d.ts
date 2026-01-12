@@ -29,6 +29,7 @@ export declare class BotService {
         date: string;
         time: string;
         teacherName: string;
+        meetingUrl?: string;
     }): Promise<boolean>;
     sendLessonReminders(): Promise<void>;
     private sendReminderForLesson;

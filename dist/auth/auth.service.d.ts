@@ -99,15 +99,8 @@ export declare class AuthService {
             isBetaTester: boolean;
         };
         roles: UserRole[];
-        newRole: UserRole;
-        profile: {
-            id: any;
-            displayName: any;
-        } | {
-            id: any;
-            displayName?: undefined;
-        };
-        message: string;
+        currentRole: UserRole;
+        token: string;
     }>;
     getMe(userId: string, role: UserRole): Promise<{
         user: {

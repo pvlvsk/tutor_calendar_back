@@ -63,6 +63,10 @@ __decorate([
     __metadata("design:type", Boolean)
 ], LessonSeries.prototype, "isFree", void 0);
 __decorate([
+    (0, typeorm_1.Column)({ nullable: true }),
+    __metadata("design:type", String)
+], LessonSeries.prototype, "meetingUrl", void 0);
+__decorate([
     (0, typeorm_1.CreateDateColumn)(),
     __metadata("design:type", Date)
 ], LessonSeries.prototype, "createdAt", void 0);
