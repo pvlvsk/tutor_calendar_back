@@ -45,6 +45,14 @@ __decorate([
     __metadata("design:type", String)
 ], LessonStudent.prototype, "paymentStatus", void 0);
 __decorate([
+    (0, typeorm_1.Column)({ type: "varchar", length: 20, default: "fixed" }),
+    __metadata("design:type", String)
+], LessonStudent.prototype, "paymentType", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ default: false }),
+    __metadata("design:type", Boolean)
+], LessonStudent.prototype, "paidFromSubscription", void 0);
+__decorate([
     (0, typeorm_1.CreateDateColumn)(),
     __metadata("design:type", Date)
 ], LessonStudent.prototype, "createdAt", void 0);

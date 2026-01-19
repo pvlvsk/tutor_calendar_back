@@ -23,6 +23,8 @@ import {
   LessonSeriesStudent,
   Invitation,
   ParentStudentRelation,
+  Subscription,
+  SubscriptionType,
 } from "../database/entities";
 import { StatsService, DebtService } from "../shared";
 import { LessonFilters } from "../shared/types";
@@ -52,6 +54,8 @@ export class TeacherService {
     private parentRelationRepo: Repository<ParentStudentRelation>,
     @InjectRepository(StudentProfile)
     private studentProfileRepo: Repository<StudentProfile>,
+    @InjectRepository(Subscription)
+    private subscriptionRepo: Repository<Subscription>,
     private statsService: StatsService,
     private debtService: DebtService,
     private botService: BotService
@@ -357,6 +361,7 @@ export class TeacherService {
       teacherId,
       studentId
     );
+    const subscription = await this.getStudentSubscription(teacherId, studentId);
 
     return {
       studentId,
@@ -364,6 +369,7 @@ export class TeacherService {
       customFields: link.customFields || link.student.customFields,
       stats,
       debt,
+      subscription,
       parentInvite: {
         code: link.student.parentInviteCode,
         url: generateInviteUrl(link.student.parentInviteCode),
@@ -609,11 +615,15 @@ export class TeacherService {
     });
     const saved = await this.lessonRepo.save(lesson);
 
+    // Определяем тип оплаты
+    const paymentType = data.paymentType || (isFree ? "free" : "fixed");
+
     for (const studentId of studentIds) {
       const lessonStudent = this.lessonStudentRepo.create({
         lessonId: saved.id,
         studentId,
-        priceRub: isFree ? 0 : priceRub,
+        priceRub: paymentType === "subscription" || isFree ? 0 : priceRub,
+        paymentType,
       });
       await this.lessonStudentRepo.save(lessonStudent);
     }
@@ -692,11 +702,15 @@ export class TeacherService {
       });
       await this.lessonRepo.save(lesson);
 
+      // Определяем тип оплаты
+      const paymentType = data.paymentType || (isFree ? "free" : "fixed");
+
       for (const studentId of studentIds) {
         const lessonStudent = this.lessonStudentRepo.create({
           lessonId: lesson.id,
           studentId,
-          priceRub: isFree ? 0 : priceRub,
+          priceRub: paymentType === "subscription" || isFree ? 0 : priceRub,
+          paymentType,
         });
         await this.lessonStudentRepo.save(lessonStudent);
       }
@@ -1343,6 +1357,7 @@ export class TeacherService {
       attendance: "attended" | "missed";
       rating?: number;
       paymentStatus?: "paid" | "unpaid";
+      useSubscription?: boolean; // Списать с абонемента
     }>
   ) {
     const lesson = await this.lessonRepo.findOne({
@@ -1361,10 +1376,26 @@ export class TeacherService {
       if (data.attendance === "missed") {
         lessonStudent.rating = null;
         lessonStudent.paymentStatus = "unpaid";
+        lessonStudent.paidFromSubscription = false;
       } else {
         if (data.rating !== undefined) lessonStudent.rating = data.rating;
-        if (data.paymentStatus !== undefined)
-          lessonStudent.paymentStatus = data.paymentStatus;
+        
+        // Обработка оплаты по абонементу
+        if (data.useSubscription) {
+          const subscriptionUsed = await this.useSubscriptionLesson(teacherId, data.studentId);
+          if (subscriptionUsed) {
+            lessonStudent.paymentType = "subscription";
+            lessonStudent.paidFromSubscription = true;
+            lessonStudent.paymentStatus = "paid";
+          } else {
+            // Абонемент недействителен - не меняем тип оплаты
+            if (data.paymentStatus !== undefined)
+              lessonStudent.paymentStatus = data.paymentStatus;
+          }
+        } else {
+          if (data.paymentStatus !== undefined)
+            lessonStudent.paymentStatus = data.paymentStatus;
+        }
       }
 
       await this.lessonStudentRepo.save(lessonStudent);
@@ -1474,6 +1505,8 @@ export class TeacherService {
         attendance: ls.attendance,
         rating: ls.rating,
         paymentStatus: ls.paymentStatus,
+        paymentType: ls.paymentType,
+        paidFromSubscription: ls.paidFromSubscription,
       })),
       subject: lesson.subject
         ? {
@@ -1571,5 +1604,298 @@ export class TeacherService {
         meetingUrl,
       });
     }
+  }
+
+  // ============================================
+  // АБОНЕМЕНТЫ
+  // ============================================
+
+  /**
+   * Получает активный абонемент ученика у данного учителя
+   */
+  async getStudentSubscription(teacherId: string, studentId: string) {
+    const subscription = await this.subscriptionRepo.findOne({
+      where: { teacherId, studentId, deletedAt: IsNull() },
+    });
+
+    if (!subscription) return null;
+
+    return this.formatSubscription(subscription);
+  }
+
+  /**
+   * Создаёт новый абонемент для ученика
+   */
+  async createSubscription(
+    teacherId: string,
+    studentId: string,
+    data: {
+      type: SubscriptionType;
+      totalLessons?: number;
+      expiresAt?: string;
+      name?: string;
+    }
+  ) {
+    // Проверяем что ученик принадлежит этому учителю
+    const link = await this.linkRepo.findOne({
+      where: { teacherId, studentId },
+    });
+    if (!link) throw new NotFoundException("STUDENT_NOT_FOUND");
+
+    // Проверяем что нет активного абонемента
+    const existing = await this.subscriptionRepo.findOne({
+      where: { teacherId, studentId, deletedAt: IsNull() },
+    });
+    if (existing) throw new ConflictException("SUBSCRIPTION_ALREADY_EXISTS");
+
+    // Валидация данных
+    if (data.type === "lessons" && !data.totalLessons) {
+      throw new ConflictException("TOTAL_LESSONS_REQUIRED");
+    }
+    if (data.type === "date" && !data.expiresAt) {
+      throw new ConflictException("EXPIRES_AT_REQUIRED");
+    }
+
+    const subscription = this.subscriptionRepo.create({
+      teacherId,
+      studentId,
+      type: data.type,
+      totalLessons: data.type === "lessons" ? data.totalLessons : null,
+      expiresAt: data.type === "date" ? new Date(data.expiresAt!) : null,
+      name: data.name,
+      usedLessons: 0,
+    });
+
+    await this.subscriptionRepo.save(subscription);
+
+    return this.formatSubscription(subscription);
+  }
+
+  /**
+   * Мягко удаляет абонемент
+   */
+  async deleteSubscription(teacherId: string, subscriptionId: string) {
+    const subscription = await this.subscriptionRepo.findOne({
+      where: { id: subscriptionId, teacherId, deletedAt: IsNull() },
+    });
+
+    if (!subscription) throw new NotFoundException("SUBSCRIPTION_NOT_FOUND");
+
+    await this.subscriptionRepo.softDelete(subscriptionId);
+
+    return { success: true };
+  }
+
+  /**
+   * Восстанавливает удалённый абонемент
+   */
+  async restoreSubscription(teacherId: string, subscriptionId: string) {
+    const subscription = await this.subscriptionRepo.findOne({
+      where: { id: subscriptionId, teacherId },
+      withDeleted: true,
+    });
+
+    if (!subscription) throw new NotFoundException("SUBSCRIPTION_NOT_FOUND");
+    if (!subscription.deletedAt) throw new ConflictException("SUBSCRIPTION_NOT_DELETED");
+
+    // Проверяем что нет другого активного абонемента
+    const existing = await this.subscriptionRepo.findOne({
+      where: { teacherId, studentId: subscription.studentId, deletedAt: IsNull() },
+    });
+    if (existing) throw new ConflictException("ANOTHER_SUBSCRIPTION_EXISTS");
+
+    await this.subscriptionRepo.restore(subscriptionId);
+
+    // Получаем обновлённую запись
+    const restored = await this.subscriptionRepo.findOne({
+      where: { id: subscriptionId },
+    });
+
+    return this.formatSubscription(restored!);
+  }
+
+  /**
+   * Списывает урок с абонемента
+   */
+  async useSubscriptionLesson(teacherId: string, studentId: string): Promise<boolean> {
+    const subscription = await this.subscriptionRepo.findOne({
+      where: { teacherId, studentId, deletedAt: IsNull() },
+    });
+
+    if (!subscription) return false;
+
+    // Проверяем что абонемент активен
+    if (subscription.type === "lessons") {
+      if (subscription.totalLessons !== null && 
+          subscription.usedLessons >= subscription.totalLessons) {
+        return false; // Абонемент исчерпан
+      }
+      // Списываем урок
+      subscription.usedLessons += 1;
+      await this.subscriptionRepo.save(subscription);
+      return true;
+    }
+
+    if (subscription.type === "date") {
+      if (subscription.expiresAt && new Date() > subscription.expiresAt) {
+        return false; // Абонемент просрочен
+      }
+      // Для временного абонемента просто увеличиваем счётчик использованных
+      subscription.usedLessons += 1;
+      await this.subscriptionRepo.save(subscription);
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Проверяет активен ли абонемент и возвращает информацию о нём
+   */
+  async hasActiveSubscription(teacherId: string, studentId: string): Promise<{
+    hasSubscription: boolean;
+    subscription?: {
+      id: string;
+      name: string | null;
+      type: "lessons" | "date";
+      remainingLessons: number | null;
+      expiresAt: string | null;
+      displayText: string;
+    };
+  }> {
+    const subscription = await this.subscriptionRepo.findOne({
+      where: { teacherId, studentId, deletedAt: IsNull() },
+    });
+
+    if (!subscription) {
+      return { hasSubscription: false };
+    }
+
+    let isActive = false;
+    let displayText = "";
+    let remainingLessons: number | null = null;
+
+    if (subscription.type === "lessons") {
+      remainingLessons = subscription.totalLessons === null 
+        ? null 
+        : Math.max(0, subscription.totalLessons - subscription.usedLessons);
+      isActive = remainingLessons === null || remainingLessons > 0;
+      displayText = remainingLessons !== null 
+        ? `Осталось ${remainingLessons} урок${this.getLessonEnding(remainingLessons)}`
+        : "Безлимитный";
+    } else if (subscription.type === "date") {
+      isActive = !subscription.expiresAt || new Date() <= subscription.expiresAt;
+      if (subscription.expiresAt) {
+        const daysLeft = Math.ceil((subscription.expiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+        displayText = isActive ? `Осталось ${daysLeft} дн.` : "Истёк";
+      } else {
+        displayText = "Бессрочный";
+      }
+    }
+
+    if (!isActive) {
+      return { hasSubscription: false };
+    }
+
+    return {
+      hasSubscription: true,
+      subscription: {
+        id: subscription.id,
+        name: subscription.name,
+        type: subscription.type,
+        remainingLessons,
+        expiresAt: subscription.expiresAt?.toISOString() || null,
+        displayText,
+      },
+    };
+  }
+
+  private getLessonEnding(count: number): string {
+    const lastTwo = count % 100;
+    if (lastTwo >= 11 && lastTwo <= 19) return "ов";
+    const lastOne = count % 10;
+    if (lastOne === 1) return "";
+    if (lastOne >= 2 && lastOne <= 4) return "а";
+    return "ов";
+  }
+
+  /**
+   * Получает архивные (удалённые) абонементы ученика
+   */
+  async getArchivedSubscriptions(teacherId: string, studentId: string) {
+    const subscriptions = await this.subscriptionRepo.find({
+      where: { teacherId, studentId },
+      withDeleted: true, // Включаем удалённые записи
+      order: { deletedAt: "DESC", createdAt: "DESC" },
+    });
+
+    // Фильтруем только удалённые или истёкшие
+    return subscriptions
+      .filter(sub => {
+        if (sub.deletedAt) return true; // Удалённый
+        // Проверяем истёкший (но не активный - те уже показываются отдельно)
+        if (sub.type === "lessons" && sub.totalLessons !== null) {
+          return sub.usedLessons >= sub.totalLessons;
+        }
+        if (sub.type === "date" && sub.expiresAt) {
+          return new Date() > sub.expiresAt;
+        }
+        return false;
+      })
+      .map(sub => this.formatSubscriptionArchived(sub));
+  }
+
+  /**
+   * Форматирует абонемент для API ответа
+   */
+  private formatSubscription(subscription: Subscription) {
+    const remainingLessons = subscription.type === "lessons" && subscription.totalLessons !== null
+      ? Math.max(0, subscription.totalLessons - subscription.usedLessons)
+      : null;
+
+    const isExpired = subscription.type === "lessons"
+      ? remainingLessons === 0
+      : subscription.expiresAt ? new Date() > subscription.expiresAt : false;
+
+    return {
+      id: subscription.id,
+      type: subscription.type,
+      totalLessons: subscription.totalLessons,
+      usedLessons: subscription.usedLessons,
+      remainingLessons,
+      expiresAt: subscription.expiresAt?.toISOString() || null,
+      name: subscription.name,
+      isExpired,
+      isActive: !subscription.deletedAt && !isExpired,
+      createdAt: subscription.createdAt.toISOString(),
+    };
+  }
+
+  /**
+   * Форматирует архивный абонемент для API ответа
+   */
+  private formatSubscriptionArchived(subscription: Subscription) {
+    const remainingLessons = subscription.type === "lessons" && subscription.totalLessons !== null
+      ? Math.max(0, subscription.totalLessons - subscription.usedLessons)
+      : null;
+
+    const isDeleted = !!subscription.deletedAt;
+    const isExpired = subscription.type === "lessons"
+      ? remainingLessons === 0
+      : subscription.expiresAt ? new Date() > subscription.expiresAt : false;
+
+    return {
+      id: subscription.id,
+      type: subscription.type,
+      totalLessons: subscription.totalLessons,
+      usedLessons: subscription.usedLessons,
+      remainingLessons,
+      expiresAt: subscription.expiresAt?.toISOString() || null,
+      name: subscription.name,
+      isDeleted,
+      isExpired,
+      createdAt: subscription.createdAt.toISOString(),
+      deletedAt: subscription.deletedAt?.toISOString() || null,
+    };
   }
 }

@@ -323,6 +323,7 @@ export class TeacherController {
         attendance: "attended" | "missed";
         rating?: number;
         paymentStatus?: "paid" | "unpaid";
+        useSubscription?: boolean; // Списать с абонемента
       }>;
     }
   ) {
@@ -399,6 +400,90 @@ export class TeacherController {
     @Param("studentId") studentId: string
   ) {
     return this.teacherService.getStudentDetailedStats(
+      req.user.profileId,
+      studentId
+    );
+  }
+
+  // ============================================
+  // АБОНЕМЕНТЫ
+  // ============================================
+
+  @Get("me/students/:studentId/subscription")
+  @ApiOperation({ summary: "Получить абонемент ученика" })
+  getStudentSubscription(
+    @Request() req: any,
+    @Param("studentId") studentId: string
+  ) {
+    return this.teacherService.getStudentSubscription(
+      req.user.profileId,
+      studentId
+    );
+  }
+
+  @Post("me/students/:studentId/subscription")
+  @ApiOperation({ summary: "Создать абонемент для ученика" })
+  createSubscription(
+    @Request() req: any,
+    @Param("studentId") studentId: string,
+    @Body()
+    body: {
+      type: "lessons" | "date";
+      totalLessons?: number;
+      expiresAt?: string;
+      name?: string;
+    }
+  ) {
+    return this.teacherService.createSubscription(
+      req.user.profileId,
+      studentId,
+      body
+    );
+  }
+
+  @Delete("me/subscriptions/:subscriptionId")
+  @ApiOperation({ summary: "Удалить абонемент (мягкое удаление)" })
+  deleteSubscription(
+    @Request() req: any,
+    @Param("subscriptionId") subscriptionId: string
+  ) {
+    return this.teacherService.deleteSubscription(
+      req.user.profileId,
+      subscriptionId
+    );
+  }
+
+  @Post("me/subscriptions/:subscriptionId/restore")
+  @ApiOperation({ summary: "Восстановить удалённый абонемент" })
+  restoreSubscription(
+    @Request() req: any,
+    @Param("subscriptionId") subscriptionId: string
+  ) {
+    return this.teacherService.restoreSubscription(
+      req.user.profileId,
+      subscriptionId
+    );
+  }
+
+  @Get("me/students/:studentId/has-subscription")
+  @ApiOperation({ summary: "Проверить есть ли активный абонемент у ученика" })
+  hasActiveSubscription(
+    @Request() req: any,
+    @Param("studentId") studentId: string
+  ) {
+    return this.teacherService.hasActiveSubscription(
+      req.user.profileId,
+      studentId
+    );
+  }
+
+  @Get("me/students/:studentId/subscriptions/archived")
+  @ApiOperation({ summary: "Получить архивные (удалённые/истёкшие) абонементы ученика" })
+  getArchivedSubscriptions(
+    @Request() req: any,
+    @Param("studentId") studentId: string
+  ) {
+    return this.teacherService.getArchivedSubscriptions(
       req.user.profileId,
       studentId
     );

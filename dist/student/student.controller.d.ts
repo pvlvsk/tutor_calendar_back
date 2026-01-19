@@ -204,4 +204,32 @@ export declare class StudentController {
         enableLessonReminders: boolean;
         enableLessonReports: boolean;
     }>;
+    getSubscriptions(req: any): Promise<{
+        id: string;
+        teacherId: string;
+        teacherName: string;
+        type: import("../database/entities").SubscriptionType;
+        totalLessons: number | null;
+        usedLessons: number;
+        remainingLessons: number | null;
+        expiresAt: string | null;
+        name: string;
+        isExpired: boolean;
+        isActive: boolean;
+        createdAt: string;
+    }[]>;
+    getSubscriptionByTeacher(req: any, teacherId: string): Promise<{
+        id: string;
+        teacherId: string;
+        teacherName: string;
+        type: import("../database/entities").SubscriptionType;
+        totalLessons: number | null;
+        usedLessons: number;
+        remainingLessons: number | null;
+        expiresAt: string | null;
+        name: string;
+        isExpired: boolean;
+        isActive: boolean;
+        createdAt: string;
+    } | null>;
 }

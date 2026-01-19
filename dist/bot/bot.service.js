@@ -124,11 +124,9 @@ let BotService = BotService_1 = class BotService {
             return false;
         }
     }
-    async sendMessageWithMiniApp(telegramId, text, buttonText = "Открыть", startParam) {
+    async sendMessageWithMiniApp(telegramId, text, buttonText = "Открыть", startParam = "open") {
         const botUsername = process.env.BOT_USERNAME || "your_bot";
-        const url = startParam
-            ? `https://t.me/${botUsername}?startapp=${startParam}`
-            : `https://t.me/${botUsername}`;
+        const url = `https://t.me/${botUsername}?startapp=${startParam}`;
         return this.sendMessage(telegramId, text, {
             replyMarkup: {
                 inline_keyboard: [
@@ -221,6 +219,56 @@ let BotService = BotService_1 = class BotService {
             await this.sendMessageWithMiniApp(ls.student.user.telegramId, text, "📚 Открыть");
             this.logger.log(`Reminder sent to student ${studentUserId} for lesson ${lesson.id}`);
         }
+    }
+    async notifyUserWelcome(telegramId, role, teacherName) {
+        if (!this.isConfigured()) {
+            this.logger.warn("Bot token not configured, skipping welcome message");
+            return false;
+        }
+        let text = '';
+        let buttonText = '📱 Открыть приложение';
+        switch (role) {
+            case 'teacher':
+                text =
+                    `🎉 <b>Добро пожаловать!</b>\n\n` +
+                        `Вы успешно зарегистрировались как <b>репетитор</b>.\n\n` +
+                        `Теперь вы можете:\n` +
+                        `📚 Управлять расписанием\n` +
+                        `👨‍🎓 Добавлять учеников\n` +
+                        `💰 Отслеживать оплаты\n` +
+                        `📊 Смотреть статистику`;
+                break;
+            case 'student':
+                text =
+                    `🎉 <b>Добро пожаловать!</b>\n\n` +
+                        `Вы успешно зарегистрировались как <b>ученик</b>` +
+                        (teacherName ? ` у репетитора <b>${teacherName}</b>` : '') + `.\n\n` +
+                        `Теперь вы можете:\n` +
+                        `📅 Просматривать расписание\n` +
+                        `📊 Следить за статистикой\n` +
+                        `👨‍👩‍👧 Пригласить родителя`;
+                buttonText = '📅 Открыть расписание';
+                break;
+            case 'parent':
+                text =
+                    `🎉 <b>Добро пожаловать!</b>\n\n` +
+                        `Вы успешно зарегистрировались как <b>родитель</b>.\n\n` +
+                        `Теперь вы можете:\n` +
+                        `📅 Просматривать расписание ребёнка\n` +
+                        `📊 Следить за успеваемостью\n` +
+                        `🔔 Получать уведомления о занятиях`;
+                buttonText = '👨‍👩‍👧 Открыть';
+                break;
+        }
+        return this.sendMessageWithMiniApp(telegramId, text, buttonText);
+    }
+    async notifyTeacherNewStudent(teacherTelegramId, studentName) {
+        if (!this.isConfigured()) {
+            return false;
+        }
+        const text = `👨‍🎓 <b>Новый ученик!</b>\n\n` +
+            `<b>${studentName}</b> присоединился к вам по ссылке-приглашению.`;
+        return this.sendMessageWithMiniApp(teacherTelegramId, text, '👥 Открыть список учеников');
     }
     async testSendMessage(telegramId, text, buttonText) {
         if (buttonText) {

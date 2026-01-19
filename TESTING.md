@@ -13,23 +13,56 @@ npm run test
 
 ---
 
+## Настройка окружения
+
+### Шаблоны `.env`
+
+| Файл           | Описание                 |
+| -------------- | ------------------------ |
+| `ENV.QA.TXT`   | Шаблон для QA/разработки |
+| `ENV.PROD.TXT` | Шаблон для продакшена    |
+
+### Копирование шаблона в `.env`
+
+```bash
+# QA / Локальная разработка
+cp ENV.QA.TXT .env
+
+# Production
+cp ENV.PROD.TXT .env
+```
+
+> ⚠️ После копирования **замените `CHANGE_ME`** на реальные значения!
+
+### Проверка `.env`
+
+```bash
+# Посмотреть содержимое
+cat .env
+
+# Проверить что переменные читаются
+grep -E "^[A-Z]" .env
+```
+
+---
+
 ## Команды
 
-| Команда | Описание |
-|---------|----------|
-| `npm run test` | Запустить все тесты один раз |
+| Команда              | Описание                                             |
+| -------------------- | ---------------------------------------------------- |
+| `npm run test`       | Запустить все тесты один раз                         |
 | `npm run test:watch` | Запустить в watch-режиме (перезапуск при изменениях) |
-| `npm run test:cov` | Запустить с отчётом о покрытии кода |
-| `npm run test:debug` | Запустить с возможностью отладки |
+| `npm run test:cov`   | Запустить с отчётом о покрытии кода                  |
+| `npm run test:debug` | Запустить с возможностью отладки                     |
 
 ---
 
 ## Билд с тестами
 
-| Команда | Описание |
-|---------|----------|
-| `npm run build` | Билд с тестами (тесты должны пройти) |
-| `npm run build:no-tests` | Билд без тестов |
+| Команда                  | Описание                             |
+| ------------------------ | ------------------------------------ |
+| `npm run build`          | Билд с тестами (тесты должны пройти) |
+| `npm run build:no-tests` | Билд без тестов                      |
 
 ---
 
@@ -128,14 +161,14 @@ npx jest --testNamePattern="calculateAttendanceRate"
 ### Тестирование утилит
 
 ```typescript
-import { calculateAttendanceRate } from '../utils';
+import { calculateAttendanceRate } from "../utils";
 
-describe('calculateAttendanceRate', () => {
-  it('должен вычислить процент посещаемости', () => {
+describe("calculateAttendanceRate", () => {
+  it("должен вычислить процент посещаемости", () => {
     expect(calculateAttendanceRate(8, 10)).toBe(80);
   });
 
-  it('должен вернуть 0 при total = 0', () => {
+  it("должен вернуть 0 при total = 0", () => {
     expect(calculateAttendanceRate(0, 0)).toBe(0);
   });
 });
@@ -144,10 +177,10 @@ describe('calculateAttendanceRate', () => {
 ### Тестирование NestJS сервисов
 
 ```typescript
-import { Test, TestingModule } from '@nestjs/testing';
-import { TeacherService } from '../teacher.service';
+import { Test, TestingModule } from "@nestjs/testing";
+import { TeacherService } from "../teacher.service";
 
-describe('TeacherService', () => {
+describe("TeacherService", () => {
   let service: TeacherService;
 
   beforeEach(async () => {
@@ -158,9 +191,9 @@ describe('TeacherService', () => {
     service = module.get<TeacherService>(TeacherService);
   });
 
-  describe('createLesson', () => {
-    it('должен создать урок', async () => {
-      const data = { subjectId: '...', startAt: '...' };
+  describe("createLesson", () => {
+    it("должен создать урок", async () => {
+      const data = { subjectId: "...", startAt: "..." };
       const result = await service.createLesson(data);
       expect(result).toBeDefined();
     });
@@ -198,19 +231,19 @@ const module = await Test.createTestingModule({
 Для тестирования HTTP эндпоинтов используем `supertest`:
 
 ```typescript
-import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication, ValidationPipe } from '@nestjs/common';
-import * as request from 'supertest';
-import { AuthController } from '../auth.controller';
-import { AuthService } from '../auth.service';
+import { Test, TestingModule } from "@nestjs/testing";
+import { INestApplication, ValidationPipe } from "@nestjs/common";
+import * as request from "supertest";
+import { AuthController } from "../auth.controller";
+import { AuthService } from "../auth.service";
 
-describe('AuthController (HTTP)', () => {
+describe("AuthController (HTTP)", () => {
   let app: INestApplication;
   let mockAuthService: Partial<AuthService>;
 
   beforeEach(async () => {
     mockAuthService = {
-      init: jest.fn().mockResolvedValue({ status: 'new_user' }),
+      init: jest.fn().mockResolvedValue({ status: "new_user" }),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -227,13 +260,13 @@ describe('AuthController (HTTP)', () => {
     await app.close();
   });
 
-  it('POST /auth/init', async () => {
+  it("POST /auth/init", async () => {
     const response = await request(app.getHttpServer())
-      .post('/auth/init')
-      .send({ initData: 'test' })
+      .post("/auth/init")
+      .send({ initData: "test" })
       .expect(201);
 
-    expect(response.body.status).toBe('new_user');
+    expect(response.body.status).toBe("new_user");
   });
 });
 ```
@@ -244,6 +277,43 @@ describe('AuthController (HTTP)', () => {
 - **Валидация DTO** — 400 при невалидных данных
 - **Middleware и pipes** — ValidationPipe, Guards
 - **Взаимодействие controller ↔ service**
+
+---
+
+## Переменные окружения
+
+### ENV.QA.TXT (QA / Разработка)
+
+```env
+NODE_ENV=development
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=teach_mini_app
+DB_PORT=5432
+BACKEND_PORT=3000
+JWT_SECRET=dev-jwt-secret-key
+JWT_EXPIRES_IN=7d
+BOT_TOKEN=your-telegram-bot-token
+BOT_USERNAME=your_bot_username
+```
+
+### ENV.PROD.TXT (Production)
+
+```env
+NODE_ENV=production
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=CHANGE_ME          # ← Надёжный пароль
+POSTGRES_DB=teach_mini_app
+DB_PORT=5432
+BACKEND_PORT=3000
+JWT_SECRET=CHANGE_ME_MIN_32_CHARS    # ← Минимум 32 символа
+JWT_EXPIRES_IN=7d
+BOT_TOKEN=CHANGE_ME                  # ← Токен от @BotFather
+BOT_USERNAME=CHANGE_ME               # ← Имя бота без @
+DATABASE_URL=postgresql://postgres:CHANGE_ME@postgres:5432/teach_mini_app
+```
+
+> **`DATABASE_URL`** — пароль в URL должен совпадать с `POSTGRES_PASSWORD`
 
 ---
 

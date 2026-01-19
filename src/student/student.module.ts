@@ -9,6 +9,7 @@ import {
   LessonStudent,
   Subject,
   StudentNotificationSettings,
+  Subscription,
 } from "../database/entities";
 
 @Module({
@@ -20,6 +21,7 @@ import {
       LessonStudent,
       Subject,
       StudentNotificationSettings,
+      Subscription,
     ]),
   ],
   controllers: [StudentController],

@@ -22,7 +22,7 @@ const shared_1 = require("../shared");
 const utils_1 = require("../shared/utils");
 const bot_service_1 = require("../bot/bot.service");
 let TeacherService = class TeacherService {
-    constructor(teacherProfileRepo, subjectRepo, linkRepo, lessonRepo, seriesRepo, lessonStudentRepo, seriesStudentRepo, invitationRepo, parentRelationRepo, studentProfileRepo, statsService, debtService, botService) {
+    constructor(teacherProfileRepo, subjectRepo, linkRepo, lessonRepo, seriesRepo, lessonStudentRepo, seriesStudentRepo, invitationRepo, parentRelationRepo, studentProfileRepo, subscriptionRepo, statsService, debtService, botService) {
         this.teacherProfileRepo = teacherProfileRepo;
         this.subjectRepo = subjectRepo;
         this.linkRepo = linkRepo;
@@ -33,6 +33,7 @@ let TeacherService = class TeacherService {
         this.invitationRepo = invitationRepo;
         this.parentRelationRepo = parentRelationRepo;
         this.studentProfileRepo = studentProfileRepo;
+        this.subscriptionRepo = subscriptionRepo;
         this.statsService = statsService;
         this.debtService = debtService;
         this.botService = botService;
@@ -239,12 +240,14 @@ let TeacherService = class TeacherService {
             throw new common_1.NotFoundException("STUDENT_NOT_FOUND");
         const stats = await this.statsService.getStudentStatsForTeacher(teacherId, studentId);
         const debt = await this.debtService.getStudentDebtForTeacher(teacherId, studentId);
+        const subscription = await this.getStudentSubscription(teacherId, studentId);
         return {
             studentId,
             studentUser: this.formatUserInfo(link.student.user),
             customFields: link.customFields || link.student.customFields,
             stats,
             debt,
+            subscription,
             parentInvite: {
                 code: link.student.parentInviteCode,
                 url: (0, utils_1.generateInviteUrl)(link.student.parentInviteCode),
@@ -419,11 +422,13 @@ let TeacherService = class TeacherService {
             meetingUrl: data.meetingUrl,
         });
         const saved = await this.lessonRepo.save(lesson);
+        const paymentType = data.paymentType || (isFree ? "free" : "fixed");
         for (const studentId of studentIds) {
             const lessonStudent = this.lessonStudentRepo.create({
                 lessonId: saved.id,
                 studentId,
-                priceRub: isFree ? 0 : priceRub,
+                priceRub: paymentType === "subscription" || isFree ? 0 : priceRub,
+                paymentType,
             });
             await this.lessonStudentRepo.save(lessonStudent);
         }
@@ -483,11 +488,13 @@ let TeacherService = class TeacherService {
                 meetingUrl: data.meetingUrl,
             });
             await this.lessonRepo.save(lesson);
+            const paymentType = data.paymentType || (isFree ? "free" : "fixed");
             for (const studentId of studentIds) {
                 const lessonStudent = this.lessonStudentRepo.create({
                     lessonId: lesson.id,
                     studentId,
-                    priceRub: isFree ? 0 : priceRub,
+                    priceRub: paymentType === "subscription" || isFree ? 0 : priceRub,
+                    paymentType,
                 });
                 await this.lessonStudentRepo.save(lessonStudent);
             }
@@ -968,12 +975,27 @@ let TeacherService = class TeacherService {
             if (data.attendance === "missed") {
                 lessonStudent.rating = null;
                 lessonStudent.paymentStatus = "unpaid";
+                lessonStudent.paidFromSubscription = false;
             }
             else {
                 if (data.rating !== undefined)
                     lessonStudent.rating = data.rating;
-                if (data.paymentStatus !== undefined)
-                    lessonStudent.paymentStatus = data.paymentStatus;
+                if (data.useSubscription) {
+                    const subscriptionUsed = await this.useSubscriptionLesson(teacherId, data.studentId);
+                    if (subscriptionUsed) {
+                        lessonStudent.paymentType = "subscription";
+                        lessonStudent.paidFromSubscription = true;
+                        lessonStudent.paymentStatus = "paid";
+                    }
+                    else {
+                        if (data.paymentStatus !== undefined)
+                            lessonStudent.paymentStatus = data.paymentStatus;
+                    }
+                }
+                else {
+                    if (data.paymentStatus !== undefined)
+                        lessonStudent.paymentStatus = data.paymentStatus;
+                }
             }
             await this.lessonStudentRepo.save(lessonStudent);
         }
@@ -1062,6 +1084,8 @@ let TeacherService = class TeacherService {
                 attendance: ls.attendance,
                 rating: ls.rating,
                 paymentStatus: ls.paymentStatus,
+                paymentType: ls.paymentType,
+                paidFromSubscription: ls.paidFromSubscription,
             })),
             subject: lesson.subject
                 ? {
@@ -1139,6 +1163,132 @@ let TeacherService = class TeacherService {
             });
         }
     }
+    async getStudentSubscription(teacherId, studentId) {
+        const subscription = await this.subscriptionRepo.findOne({
+            where: { teacherId, studentId, deletedAt: (0, typeorm_2.IsNull)() },
+        });
+        if (!subscription)
+            return null;
+        return this.formatSubscription(subscription);
+    }
+    async createSubscription(teacherId, studentId, data) {
+        const link = await this.linkRepo.findOne({
+            where: { teacherId, studentId },
+        });
+        if (!link)
+            throw new common_1.NotFoundException("STUDENT_NOT_FOUND");
+        const existing = await this.subscriptionRepo.findOne({
+            where: { teacherId, studentId, deletedAt: (0, typeorm_2.IsNull)() },
+        });
+        if (existing)
+            throw new common_1.ConflictException("SUBSCRIPTION_ALREADY_EXISTS");
+        if (data.type === "lessons" && !data.totalLessons) {
+            throw new common_1.ConflictException("TOTAL_LESSONS_REQUIRED");
+        }
+        if (data.type === "date" && !data.expiresAt) {
+            throw new common_1.ConflictException("EXPIRES_AT_REQUIRED");
+        }
+        const subscription = this.subscriptionRepo.create({
+            teacherId,
+            studentId,
+            type: data.type,
+            totalLessons: data.type === "lessons" ? data.totalLessons : null,
+            expiresAt: data.type === "date" ? new Date(data.expiresAt) : null,
+            name: data.name,
+            usedLessons: 0,
+        });
+        await this.subscriptionRepo.save(subscription);
+        return this.formatSubscription(subscription);
+    }
+    async deleteSubscription(teacherId, subscriptionId) {
+        const subscription = await this.subscriptionRepo.findOne({
+            where: { id: subscriptionId, teacherId, deletedAt: (0, typeorm_2.IsNull)() },
+        });
+        if (!subscription)
+            throw new common_1.NotFoundException("SUBSCRIPTION_NOT_FOUND");
+        await this.subscriptionRepo.softDelete(subscriptionId);
+        return { success: true };
+    }
+    async restoreSubscription(teacherId, subscriptionId) {
+        const subscription = await this.subscriptionRepo.findOne({
+            where: { id: subscriptionId, teacherId },
+            withDeleted: true,
+        });
+        if (!subscription)
+            throw new common_1.NotFoundException("SUBSCRIPTION_NOT_FOUND");
+        if (!subscription.deletedAt)
+            throw new common_1.ConflictException("SUBSCRIPTION_NOT_DELETED");
+        const existing = await this.subscriptionRepo.findOne({
+            where: { teacherId, studentId: subscription.studentId, deletedAt: (0, typeorm_2.IsNull)() },
+        });
+        if (existing)
+            throw new common_1.ConflictException("ANOTHER_SUBSCRIPTION_EXISTS");
+        await this.subscriptionRepo.restore(subscriptionId);
+        const restored = await this.subscriptionRepo.findOne({
+            where: { id: subscriptionId },
+        });
+        return this.formatSubscription(restored);
+    }
+    async useSubscriptionLesson(teacherId, studentId) {
+        const subscription = await this.subscriptionRepo.findOne({
+            where: { teacherId, studentId, deletedAt: (0, typeorm_2.IsNull)() },
+        });
+        if (!subscription)
+            return false;
+        if (subscription.type === "lessons") {
+            if (subscription.totalLessons !== null &&
+                subscription.usedLessons >= subscription.totalLessons) {
+                return false;
+            }
+            subscription.usedLessons += 1;
+            await this.subscriptionRepo.save(subscription);
+            return true;
+        }
+        if (subscription.type === "date") {
+            if (subscription.expiresAt && new Date() > subscription.expiresAt) {
+                return false;
+            }
+            subscription.usedLessons += 1;
+            await this.subscriptionRepo.save(subscription);
+            return true;
+        }
+        return false;
+    }
+    async hasActiveSubscription(teacherId, studentId) {
+        const subscription = await this.subscriptionRepo.findOne({
+            where: { teacherId, studentId, deletedAt: (0, typeorm_2.IsNull)() },
+        });
+        if (!subscription)
+            return false;
+        if (subscription.type === "lessons") {
+            return subscription.totalLessons === null ||
+                subscription.usedLessons < subscription.totalLessons;
+        }
+        if (subscription.type === "date") {
+            return !subscription.expiresAt || new Date() <= subscription.expiresAt;
+        }
+        return false;
+    }
+    formatSubscription(subscription) {
+        const remainingLessons = subscription.type === "lessons" && subscription.totalLessons !== null
+            ? Math.max(0, subscription.totalLessons - subscription.usedLessons)
+            : null;
+        const isExpired = subscription.type === "lessons"
+            ? remainingLessons === 0
+            : subscription.expiresAt ? new Date() > subscription.expiresAt : false;
+        return {
+            id: subscription.id,
+            type: subscription.type,
+            totalLessons: subscription.totalLessons,
+            usedLessons: subscription.usedLessons,
+            remainingLessons,
+            expiresAt: subscription.expiresAt?.toISOString() || null,
+            name: subscription.name,
+            isExpired,
+            isActive: !subscription.deletedAt && !isExpired,
+            createdAt: subscription.createdAt.toISOString(),
+        };
+    }
 };
 exports.TeacherService = TeacherService;
 exports.TeacherService = TeacherService = __decorate([
@@ -1153,7 +1303,9 @@ exports.TeacherService = TeacherService = __decorate([
     __param(7, (0, typeorm_1.InjectRepository)(entities_1.Invitation)),
     __param(8, (0, typeorm_1.InjectRepository)(entities_1.ParentStudentRelation)),
     __param(9, (0, typeorm_1.InjectRepository)(entities_1.StudentProfile)),
+    __param(10, (0, typeorm_1.InjectRepository)(entities_1.Subscription)),
     __metadata("design:paramtypes", [typeorm_2.Repository,
+        typeorm_2.Repository,
         typeorm_2.Repository,
         typeorm_2.Repository,
         typeorm_2.Repository,

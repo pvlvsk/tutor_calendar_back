@@ -14,6 +14,7 @@ import {
   LessonSeriesStudent,
   Invitation,
   ParentStudentRelation,
+  Subscription,
 } from "../database/entities";
 
 @Module({
@@ -29,6 +30,7 @@ import {
       LessonSeriesStudent,
       Invitation,
       ParentStudentRelation,
+      Subscription,
     ]),
     BotModule,
   ],

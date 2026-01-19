@@ -17,6 +17,7 @@ import {
   LessonStudent,
   StudentNotificationSettings,
   Subject,
+  Subscription,
 } from "../database/entities";
 import { StatsService, AchievementsService } from "../shared";
 import { LessonFilters, StudentGamifiedStats } from "../shared/types";
@@ -37,6 +38,8 @@ export class StudentService {
     private notificationSettingsRepo: Repository<StudentNotificationSettings>,
     @InjectRepository(Subject)
     private subjectRepo: Repository<Subject>,
+    @InjectRepository(Subscription)
+    private subscriptionRepo: Repository<Subscription>,
     private statsService: StatsService,
     private achievementsService: AchievementsService
   ) {}
@@ -490,6 +493,69 @@ export class StudentService {
 
     await this.notificationSettingsRepo.save(settings);
     return this.getNotificationSettings(studentId);
+  }
+
+  // ============================================
+  // АБОНЕМЕНТЫ
+  // ============================================
+
+  /**
+   * Получает все абонементы ученика (от всех учителей)
+   */
+  async getSubscriptions(studentId: string) {
+    const subscriptions = await this.subscriptionRepo.find({
+      where: { studentId },
+      relations: ["teacher", "teacher.user"],
+      order: { createdAt: "DESC" },
+    });
+
+    return subscriptions.map((sub) => this.formatSubscription(sub));
+  }
+
+  /**
+   * Получает абонемент от конкретного учителя
+   */
+  async getSubscriptionByTeacher(studentId: string, teacherId: string) {
+    const subscription = await this.subscriptionRepo.findOne({
+      where: { studentId, teacherId, deletedAt: null as any },
+      relations: ["teacher", "teacher.user"],
+    });
+
+    if (!subscription) return null;
+
+    return this.formatSubscription(subscription);
+  }
+
+  private formatSubscription(subscription: Subscription) {
+    const remainingLessons =
+      subscription.type === "lessons" && subscription.totalLessons !== null
+        ? Math.max(0, subscription.totalLessons - subscription.usedLessons)
+        : null;
+
+    const isExpired =
+      subscription.type === "lessons"
+        ? remainingLessons === 0
+        : subscription.expiresAt
+        ? new Date() > subscription.expiresAt
+        : false;
+
+    return {
+      id: subscription.id,
+      teacherId: subscription.teacherId,
+      teacherName:
+        subscription.teacher?.displayName ||
+        subscription.teacher?.user?.firstName ||
+        "Учитель",
+      type: subscription.type,
+      totalLessons: subscription.totalLessons,
+      usedLessons: subscription.usedLessons,
+      remainingLessons,
+      expiresAt: subscription.expiresAt?.toISOString() || null,
+      name: subscription.name,
+      isExpired,
+      isActive: !subscription.deletedAt && !isExpired,
+      createdAt: subscription.createdAt.toISOString(),
+    };
   }
 
   // ============================================

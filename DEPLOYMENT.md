@@ -24,18 +24,30 @@ cd tutor_calendar_back
 
 ### 3. Создать .env
 
+Используй шаблон для продакшена:
+
+```bash
+cp ENV.PROD.TXT .env
+nano .env  # Заполни реальными данными
 ```
+
+Или создай вручную:
+
+```env
+NODE_ENV=production
 POSTGRES_USER=postgres
-POSTGRES_PASSWORD=your_password
+POSTGRES_PASSWORD=your_strong_password
 POSTGRES_DB=teach_mini_app
-DATABASE_URL=postgresql://postgres:your_password@postgres:5432/teach_mini_app
+DB_PORT=5432
+BACKEND_PORT=3000
 JWT_SECRET=your_jwt_secret_min_32_chars
 JWT_EXPIRES_IN=7d
 BOT_TOKEN=your_bot_token
 BOT_USERNAME=your_bot
 BETA_CODE=beta_2025
-BACKEND_PORT=3000
 ```
+
+> **Шаблоны:** `ENV.QA.TXT` - для локальной разработки, `ENV.PROD.TXT` - для продакшена
 
 ### 4. Запустить
 
@@ -58,7 +70,7 @@ Dockerfile использует npm run build:no-tests для ускорения
 
 ```bash
 docker compose up -d          # Запустить
-docker compose down           # Остановить  
+docker compose down           # Остановить
 docker compose up -d --build  # Пересобрать
 docker compose logs -f backend # Логи
 docker compose down -v        # Удалить данные
@@ -88,7 +100,6 @@ URL: http://IP:9000
 - Database: teach_mini_app
 - User/Pass: из .env
 
-
 ---
 
 ## Настройка домена и HTTPS
@@ -97,12 +108,13 @@ URL: http://IP:9000
 
 В панели управления доменом добавьте A-записи:
 
-| Запись | Тип | IP |
-|--------|-----|-----|
-| api.your-domain.com | A | IP_сервера |
-| www.api.your-domain.com | A | IP_сервера |
+| Запись                  | Тип | IP         |
+| ----------------------- | --- | ---------- |
+| api.your-domain.com     | A   | IP_сервера |
+| www.api.your-domain.com | A   | IP_сервера |
 
 Проверить DNS:
+
 ```bash
 dig @8.8.8.8 api.your-domain.com +short
 dig @1.1.1.1 api.your-domain.com +short
@@ -146,6 +158,7 @@ sudo certbot --nginx -d api.your-domain.com -d www.api.your-domain.com
 ```
 
 Certbot автоматически:
+
 - Получит сертификат от Let's Encrypt
 - Обновит nginx конфиг для HTTPS
 - Настроит автообновление сертификата
@@ -179,4 +192,230 @@ sudo certbot renew --dry-run
 
 ```bash
 sudo certbot renew --force-renewal
+```
+
+---
+
+## Доставка изменений на прод
+
+### Вариант 1: Через Git
+
+```bash
+# На сервере
+cd ~/tutor_calendar_back
+
+# Получить изменения
+git pull origin main
+
+# Пересобрать и перезапустить
+docker compose down
+docker compose up -d --build
+
+# Проверить логи
+docker compose logs -f backend
+```
+
+### Вариант 2: Ручная загрузка файлов
+
+```bash
+# С локальной машины - загрузить изменённые файлы
+scp -r src/ root@your-server-ip:~/tutor_calendar_back/
+scp package.json root@your-server-ip:~/tutor_calendar_back/
+
+# На сервере - пересобрать
+ssh root@your-server-ip
+cd ~/tutor_calendar_back
+docker compose down
+docker compose up -d --build
+```
+
+### Вариант 3: Полная перезаливка
+
+```bash
+# На локальной машине - создать архив (без node_modules)
+cd backend
+tar --exclude='node_modules' --exclude='dist' --exclude='.env' -czvf backend.tar.gz .
+
+# Загрузить на сервер
+scp backend.tar.gz root@your-server-ip:~/
+
+# На сервере
+ssh root@your-server-ip
+cd ~
+rm -rf tutor_calendar_back_backup
+mv tutor_calendar_back tutor_calendar_back_backup
+mkdir tutor_calendar_back
+cd tutor_calendar_back
+tar -xzvf ../backend.tar.gz
+
+# Скопировать .env из бэкапа
+cp ../tutor_calendar_back_backup/.env .
+
+# Пересобрать
+docker compose down
+docker compose up -d --build
+```
+
+### Быстрое обновление (только код, без зависимостей)
+
+Если изменились только файлы в `src/`:
+
+```bash
+# На сервере
+cd ~/tutor_calendar_back
+docker compose exec backend sh -c "rm -rf dist && npm run build:no-tests"
+docker compose restart backend
+```
+
+---
+
+## Миграции базы данных
+
+Миграции хранятся в папке `migrations/` и применяются вручную.
+
+### Структура миграций
+
+```
+migrations/
+├── 001_group_lessons.sql      # Групповые уроки
+├── 002_meeting_url.sql        # Ссылка на встречу
+└── ...
+```
+
+### Применение миграции
+
+```bash
+# 1. Загрузить файл миграции на сервер (если ещё нет)
+scp migrations/002_meeting_url.sql root@your-server-ip:~/tutor_calendar_back/migrations/
+
+# 2. На сервере - применить миграцию
+cd ~/tutor_calendar_back
+docker compose exec postgres psql -U postgres -d teach_mini_app -f /migrations/002_meeting_url.sql
+```
+
+### Применение миграции через копирование
+
+```bash
+# Скопировать в контейнер и выполнить
+docker compose cp migrations/002_meeting_url.sql postgres:/tmp/migration.sql
+docker compose exec postgres psql -U postgres -d teach_mini_app -f /tmp/migration.sql
+```
+
+### Проверка применённых изменений
+
+```bash
+# Подключиться к БД
+docker compose exec postgres psql -U postgres -d teach_mini_app
+
+# В psql:
+\dt                    -- список таблиц
+\d lessons             -- структура таблицы lessons
+SELECT * FROM users;   -- просмотр данных
+\q                     -- выход
+```
+
+### Откат миграции
+
+Создайте файл отката и выполните:
+
+```bash
+# Пример: откат добавления колонки
+docker compose exec postgres psql -U postgres -d teach_mini_app -c \
+  "ALTER TABLE lessons DROP COLUMN IF EXISTS meetingUrl;"
+```
+
+### Создание новой миграции
+
+1. Создайте файл `migrations/XXX_description.sql`
+2. Напишите SQL:
+
+```sql
+-- migrations/003_new_feature.sql
+-- Описание: добавление новой фичи
+
+-- Добавить колонку
+ALTER TABLE users ADD COLUMN IF NOT EXISTS "newColumn" VARCHAR(255);
+
+-- Создать индекс (если нужно)
+CREATE INDEX IF NOT EXISTS idx_users_new_column ON users("newColumn");
+```
+
+3. Применить на проде (см. выше)
+
+---
+
+## Бэкап и восстановление БД
+
+### Создание бэкапа
+
+```bash
+# На сервере
+cd ~/tutor_calendar_back
+
+# Создать дамп
+docker compose exec postgres pg_dump -U postgres teach_mini_app > backup_$(date +%Y%m%d_%H%M%S).sql
+
+# Или сжатый
+docker compose exec postgres pg_dump -U postgres teach_mini_app | gzip > backup_$(date +%Y%m%d).sql.gz
+```
+
+### Восстановление из бэкапа
+
+```bash
+# Из обычного файла
+docker compose exec -T postgres psql -U postgres -d teach_mini_app < backup_20260112.sql
+
+# Из сжатого
+gunzip -c backup_20260112.sql.gz | docker compose exec -T postgres psql -U postgres -d teach_mini_app
+```
+
+### Автоматический бэкап (cron)
+
+```bash
+# Добавить в crontab
+crontab -e
+
+# Ежедневный бэкап в 3:00
+0 3 * * * cd ~/tutor_calendar_back && docker compose exec -T postgres pg_dump -U postgres teach_mini_app | gzip > ~/backups/db_$(date +\%Y\%m\%d).sql.gz
+```
+
+---
+
+## Мониторинг
+
+### Логи
+
+```bash
+# Все логи
+docker compose logs -f
+
+# Только backend
+docker compose logs -f backend
+
+# Последние 100 строк
+docker compose logs --tail=100 backend
+
+# С временными метками
+docker compose logs -f -t backend
+```
+
+### Ресурсы
+
+```bash
+# Использование ресурсов контейнерами
+docker stats
+
+# Место на диске
+df -h
+docker system df
+```
+
+### Health check
+
+```bash
+# Проверка API
+curl https://api.quickbotics.ru/api/health
+
+# Проверка БД
+docker compose exec postgres pg_isready -U postgres
 ```

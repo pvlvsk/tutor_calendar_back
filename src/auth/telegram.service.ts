@@ -11,7 +11,8 @@ export interface TelegramUser {
 @Injectable()
 export class TelegramService {
   private readonly botToken = process.env.BOT_TOKEN
-  private readonly isDev = !this.botToken
+  // Dev режим: нет BOT_TOKEN или NODE_ENV=development
+  private readonly isDev = !this.botToken || process.env.NODE_ENV === 'development'
 
   validateInitData(initData: string): TelegramUser | null {
     if (this.isDev) {

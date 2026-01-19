@@ -2,6 +2,7 @@ import { JwtService } from "@nestjs/jwt";
 import { Repository } from "typeorm";
 import { TelegramService } from "./telegram.service";
 import { User, TeacherProfile, StudentProfile, ParentProfile, Invitation, TeacherStudentLink, ParentStudentRelation } from "../database/entities";
+import { BotService } from "../bot/bot.service";
 type UserRole = "teacher" | "student" | "parent";
 export declare class AuthService {
     private userRepository;
@@ -13,8 +14,9 @@ export declare class AuthService {
     private parentStudentRelationRepository;
     private jwtService;
     private telegramService;
+    private botService;
     private readonly logger;
-    constructor(userRepository: Repository<User>, teacherProfileRepository: Repository<TeacherProfile>, studentProfileRepository: Repository<StudentProfile>, parentProfileRepository: Repository<ParentProfile>, invitationRepository: Repository<Invitation>, teacherStudentLinkRepository: Repository<TeacherStudentLink>, parentStudentRelationRepository: Repository<ParentStudentRelation>, jwtService: JwtService, telegramService: TelegramService);
+    constructor(userRepository: Repository<User>, teacherProfileRepository: Repository<TeacherProfile>, studentProfileRepository: Repository<StudentProfile>, parentProfileRepository: Repository<ParentProfile>, invitationRepository: Repository<Invitation>, teacherStudentLinkRepository: Repository<TeacherStudentLink>, parentStudentRelationRepository: Repository<ParentStudentRelation>, jwtService: JwtService, telegramService: TelegramService, botService: BotService);
     init(initData: string): Promise<{
         isNewUser: boolean;
         telegramUser: {

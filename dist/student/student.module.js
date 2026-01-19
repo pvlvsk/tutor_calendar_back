@@ -25,6 +25,7 @@ exports.StudentModule = StudentModule = __decorate([
                 entities_1.LessonStudent,
                 entities_1.Subject,
                 entities_1.StudentNotificationSettings,
+                entities_1.Subscription,
             ]),
         ],
         controllers: [student_controller_1.StudentController],

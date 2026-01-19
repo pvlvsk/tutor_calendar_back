@@ -122,6 +122,21 @@ let TeacherController = class TeacherController {
     getStudentDetailedStats(req, studentId) {
         return this.teacherService.getStudentDetailedStats(req.user.profileId, studentId);
     }
+    getStudentSubscription(req, studentId) {
+        return this.teacherService.getStudentSubscription(req.user.profileId, studentId);
+    }
+    createSubscription(req, studentId, body) {
+        return this.teacherService.createSubscription(req.user.profileId, studentId, body);
+    }
+    deleteSubscription(req, subscriptionId) {
+        return this.teacherService.deleteSubscription(req.user.profileId, subscriptionId);
+    }
+    restoreSubscription(req, subscriptionId) {
+        return this.teacherService.restoreSubscription(req.user.profileId, subscriptionId);
+    }
+    hasActiveSubscription(req, studentId) {
+        return this.teacherService.hasActiveSubscription(req.user.profileId, studentId);
+    }
 };
 exports.TeacherController = TeacherController;
 __decorate([
@@ -458,6 +473,52 @@ __decorate([
     __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", void 0)
 ], TeacherController.prototype, "getStudentDetailedStats", null);
+__decorate([
+    (0, common_1.Get)("me/students/:studentId/subscription"),
+    (0, swagger_1.ApiOperation)({ summary: "Получить абонемент ученика" }),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Param)("studentId")),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], TeacherController.prototype, "getStudentSubscription", null);
+__decorate([
+    (0, common_1.Post)("me/students/:studentId/subscription"),
+    (0, swagger_1.ApiOperation)({ summary: "Создать абонемент для ученика" }),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Param)("studentId")),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, Object]),
+    __metadata("design:returntype", void 0)
+], TeacherController.prototype, "createSubscription", null);
+__decorate([
+    (0, common_1.Delete)("me/subscriptions/:subscriptionId"),
+    (0, swagger_1.ApiOperation)({ summary: "Удалить абонемент (мягкое удаление)" }),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Param)("subscriptionId")),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], TeacherController.prototype, "deleteSubscription", null);
+__decorate([
+    (0, common_1.Post)("me/subscriptions/:subscriptionId/restore"),
+    (0, swagger_1.ApiOperation)({ summary: "Восстановить удалённый абонемент" }),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Param)("subscriptionId")),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], TeacherController.prototype, "restoreSubscription", null);
+__decorate([
+    (0, common_1.Get)("me/students/:studentId/has-subscription"),
+    (0, swagger_1.ApiOperation)({ summary: "Проверить есть ли активный абонемент у ученика" }),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Param)("studentId")),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], TeacherController.prototype, "hasActiveSubscription", null);
 exports.TeacherController = TeacherController = __decorate([
     (0, swagger_1.ApiTags)("teachers"),
     (0, common_1.Controller)("teachers"),

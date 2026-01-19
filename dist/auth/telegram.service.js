@@ -12,7 +12,7 @@ const crypto = require("crypto");
 let TelegramService = class TelegramService {
     constructor() {
         this.botToken = process.env.BOT_TOKEN;
-        this.isDev = !this.botToken;
+        this.isDev = !this.botToken || process.env.NODE_ENV === 'development';
     }
     validateInitData(initData) {
         if (this.isDev) {

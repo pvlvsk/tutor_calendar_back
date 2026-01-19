@@ -86,6 +86,18 @@ export declare class TeacherController {
         customFields: Record<string, string>;
         stats: import("../shared").AttendanceStats;
         debt: import("../shared").DebtInfo;
+        subscription: {
+            id: string;
+            type: import("../database/entities").SubscriptionType;
+            totalLessons: number | null;
+            usedLessons: number;
+            remainingLessons: number | null;
+            expiresAt: string | null;
+            name: string;
+            isExpired: boolean;
+            isActive: boolean;
+            createdAt: string;
+        } | null;
         parentInvite: {
             code: string;
             url: string;
@@ -105,6 +117,18 @@ export declare class TeacherController {
         customFields: Record<string, string>;
         stats: import("../shared").AttendanceStats;
         debt: import("../shared").DebtInfo;
+        subscription: {
+            id: string;
+            type: import("../database/entities").SubscriptionType;
+            totalLessons: number | null;
+            usedLessons: number;
+            remainingLessons: number | null;
+            expiresAt: string | null;
+            name: string;
+            isExpired: boolean;
+            isActive: boolean;
+            createdAt: string;
+        } | null;
         parentInvite: {
             code: string;
             url: string;
@@ -169,6 +193,8 @@ export declare class TeacherController {
             attendance: string;
             rating: number | null;
             paymentStatus: string;
+            paymentType: import("../database/entities").PaymentType;
+            paidFromSubscription: boolean;
         }[];
         subject: {
             name: string;
@@ -207,6 +233,8 @@ export declare class TeacherController {
             attendance: string;
             rating: number | null;
             paymentStatus: string;
+            paymentType: import("../database/entities").PaymentType;
+            paidFromSubscription: boolean;
         }[];
         subject: {
             name: string;
@@ -265,6 +293,8 @@ export declare class TeacherController {
             attendance: string;
             rating: number | null;
             paymentStatus: string;
+            paymentType: import("../database/entities").PaymentType;
+            paidFromSubscription: boolean;
         }[];
         subject: {
             name: string;
@@ -303,6 +333,8 @@ export declare class TeacherController {
             attendance: string;
             rating: number | null;
             paymentStatus: string;
+            paymentType: import("../database/entities").PaymentType;
+            paidFromSubscription: boolean;
         }[];
         subject: {
             name: string;
@@ -358,6 +390,8 @@ export declare class TeacherController {
             attendance: string;
             rating: number | null;
             paymentStatus: string;
+            paymentType: import("../database/entities").PaymentType;
+            paidFromSubscription: boolean;
         }[];
         subject: {
             name: string;
@@ -396,6 +430,8 @@ export declare class TeacherController {
             attendance: string;
             rating: number | null;
             paymentStatus: string;
+            paymentType: import("../database/entities").PaymentType;
+            paidFromSubscription: boolean;
         }[];
         subject: {
             name: string;
@@ -414,6 +450,7 @@ export declare class TeacherController {
             attendance: "attended" | "missed";
             rating?: number;
             paymentStatus?: "paid" | "unpaid";
+            useSubscription?: boolean;
         }>;
     }): Promise<{
         id: string;
@@ -447,6 +484,8 @@ export declare class TeacherController {
             attendance: string;
             rating: number | null;
             paymentStatus: string;
+            paymentType: import("../database/entities").PaymentType;
+            paidFromSubscription: boolean;
         }[];
         subject: {
             name: string;
@@ -488,6 +527,8 @@ export declare class TeacherController {
             attendance: string;
             rating: number | null;
             paymentStatus: string;
+            paymentType: import("../database/entities").PaymentType;
+            paidFromSubscription: boolean;
         }[];
         subject: {
             name: string;
@@ -542,4 +583,49 @@ export declare class TeacherController {
     getStudentDebt(req: any, studentId: string): Promise<import("../shared").DetailedDebt>;
     getStudentStats(req: any, studentId: string): Promise<import("../shared").StudentCardStats>;
     getStudentDetailedStats(req: any, studentId: string): Promise<import("../shared").StudentDetailedStatsForTeacher>;
+    getStudentSubscription(req: any, studentId: string): Promise<{
+        id: string;
+        type: import("../database/entities").SubscriptionType;
+        totalLessons: number | null;
+        usedLessons: number;
+        remainingLessons: number | null;
+        expiresAt: string | null;
+        name: string;
+        isExpired: boolean;
+        isActive: boolean;
+        createdAt: string;
+    } | null>;
+    createSubscription(req: any, studentId: string, body: {
+        type: "lessons" | "date";
+        totalLessons?: number;
+        expiresAt?: string;
+        name?: string;
+    }): Promise<{
+        id: string;
+        type: import("../database/entities").SubscriptionType;
+        totalLessons: number | null;
+        usedLessons: number;
+        remainingLessons: number | null;
+        expiresAt: string | null;
+        name: string;
+        isExpired: boolean;
+        isActive: boolean;
+        createdAt: string;
+    }>;
+    deleteSubscription(req: any, subscriptionId: string): Promise<{
+        success: boolean;
+    }>;
+    restoreSubscription(req: any, subscriptionId: string): Promise<{
+        id: string;
+        type: import("../database/entities").SubscriptionType;
+        totalLessons: number | null;
+        usedLessons: number;
+        remainingLessons: number | null;
+        expiresAt: string | null;
+        name: string;
+        isExpired: boolean;
+        isActive: boolean;
+        createdAt: string;
+    }>;
+    hasActiveSubscription(req: any, studentId: string): Promise<boolean>;
 }

@@ -22,11 +22,12 @@ const nanoid_1 = require("nanoid");
 const telegram_service_1 = require("./telegram.service");
 const entities_1 = require("../database/entities");
 const utils_1 = require("../shared/utils");
+const bot_service_1 = require("../bot/bot.service");
 function generateReferralCode(prefix) {
     return `${prefix}_${(0, nanoid_1.nanoid)(12)}`;
 }
 let AuthService = AuthService_1 = class AuthService {
-    constructor(userRepository, teacherProfileRepository, studentProfileRepository, parentProfileRepository, invitationRepository, teacherStudentLinkRepository, parentStudentRelationRepository, jwtService, telegramService) {
+    constructor(userRepository, teacherProfileRepository, studentProfileRepository, parentProfileRepository, invitationRepository, teacherStudentLinkRepository, parentStudentRelationRepository, jwtService, telegramService, botService) {
         this.userRepository = userRepository;
         this.teacherProfileRepository = teacherProfileRepository;
         this.studentProfileRepository = studentProfileRepository;
@@ -36,6 +37,7 @@ let AuthService = AuthService_1 = class AuthService {
         this.parentStudentRelationRepository = parentStudentRelationRepository;
         this.jwtService = jwtService;
         this.telegramService = telegramService;
+        this.botService = botService;
         this.logger = new common_1.Logger(AuthService_1.name);
     }
     async init(initData) {
@@ -105,6 +107,9 @@ let AuthService = AuthService_1 = class AuthService {
         const userWithProfile = { ...user, [`${role}Profile`]: profile };
         const token = this.generateToken(userWithProfile, role);
         this.logger.log(`Register: tg=${telegramUser.id} role=${role} userId=${user.id}`);
+        this.botService.notifyUserWelcome(telegramUser.id, role).catch((err) => {
+            this.logger.warn(`Failed to send welcome notification: ${err.message}`);
+        });
         return {
             user: this.formatUser(user),
             roles: [role],
@@ -410,6 +415,19 @@ let AuthService = AuthService_1 = class AuthService {
         const roles = this.getUserRoles(user);
         const token = this.generateToken(user, "student");
         this.logger.log(`JoinTeacher: tg=${telegramUser.id} linked to teacher=${teacher.id}`);
+        this.botService
+            .notifyUserWelcome(telegramUser.id, "student", teacher.displayName)
+            .catch((err) => {
+            this.logger.warn(`Failed to send welcome notification: ${err.message}`);
+        });
+        if (teacher.user?.telegramId) {
+            const studentName = (0, utils_1.formatFullName)(telegramUser.first_name, telegramUser.last_name);
+            this.botService
+                .notifyTeacherNewStudent(teacher.user.telegramId, studentName || "Новый ученик")
+                .catch((err) => {
+                this.logger.warn(`Failed to notify teacher: ${err.message}`);
+            });
+        }
         const botUsername = (0, utils_1.getBotUsername)();
         return {
             user: this.formatUser(user),
@@ -445,6 +463,9 @@ let AuthService = AuthService_1 = class AuthService {
         const roles = this.getUserRoles(user);
         const token = this.generateToken(user, "parent");
         this.logger.log(`JoinAsParent: tg=${telegramUser.id} linked to student=${student.id}`);
+        this.botService.notifyUserWelcome(telegramUser.id, "parent").catch((err) => {
+            this.logger.warn(`Failed to send welcome notification: ${err.message}`);
+        });
         return {
             user: this.formatUser(user),
             roles,
@@ -598,6 +619,7 @@ exports.AuthService = AuthService = AuthService_1 = __decorate([
         typeorm_2.Repository,
         typeorm_2.Repository,
         jwt_1.JwtService,
-        telegram_service_1.TelegramService])
+        telegram_service_1.TelegramService,
+        bot_service_1.BotService])
 ], AuthService);
 //# sourceMappingURL=auth.service.js.map

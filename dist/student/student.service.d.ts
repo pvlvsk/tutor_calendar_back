@@ -1,5 +1,5 @@
 import { Repository } from "typeorm";
-import { StudentProfile, TeacherStudentLink, Lesson, LessonStudent, StudentNotificationSettings, Subject } from "../database/entities";
+import { StudentProfile, TeacherStudentLink, Lesson, LessonStudent, StudentNotificationSettings, Subject, Subscription } from "../database/entities";
 import { StatsService, AchievementsService } from "../shared";
 import { LessonFilters, StudentGamifiedStats } from "../shared/types";
 export declare class StudentService {
@@ -9,9 +9,10 @@ export declare class StudentService {
     private lessonStudentRepo;
     private notificationSettingsRepo;
     private subjectRepo;
+    private subscriptionRepo;
     private statsService;
     private achievementsService;
-    constructor(studentProfileRepo: Repository<StudentProfile>, linkRepo: Repository<TeacherStudentLink>, lessonRepo: Repository<Lesson>, lessonStudentRepo: Repository<LessonStudent>, notificationSettingsRepo: Repository<StudentNotificationSettings>, subjectRepo: Repository<Subject>, statsService: StatsService, achievementsService: AchievementsService);
+    constructor(studentProfileRepo: Repository<StudentProfile>, linkRepo: Repository<TeacherStudentLink>, lessonRepo: Repository<Lesson>, lessonStudentRepo: Repository<LessonStudent>, notificationSettingsRepo: Repository<StudentNotificationSettings>, subjectRepo: Repository<Subject>, subscriptionRepo: Repository<Subscription>, statsService: StatsService, achievementsService: AchievementsService);
     getProfile(studentId: string): Promise<{
         id: string;
         userId: string;
@@ -221,5 +222,34 @@ export declare class StudentService {
         enableLessonReminders: boolean;
         enableLessonReports: boolean;
     }>;
+    getSubscriptions(studentId: string): Promise<{
+        id: string;
+        teacherId: string;
+        teacherName: string;
+        type: import("../database/entities").SubscriptionType;
+        totalLessons: number | null;
+        usedLessons: number;
+        remainingLessons: number | null;
+        expiresAt: string | null;
+        name: string;
+        isExpired: boolean;
+        isActive: boolean;
+        createdAt: string;
+    }[]>;
+    getSubscriptionByTeacher(studentId: string, teacherId: string): Promise<{
+        id: string;
+        teacherId: string;
+        teacherName: string;
+        type: import("../database/entities").SubscriptionType;
+        totalLessons: number | null;
+        usedLessons: number;
+        remainingLessons: number | null;
+        expiresAt: string | null;
+        name: string;
+        isExpired: boolean;
+        isActive: boolean;
+        createdAt: string;
+    } | null>;
+    private formatSubscription;
     private formatUserInfo;
 }

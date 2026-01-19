@@ -61,6 +61,12 @@ let StudentController = class StudentController {
     updateNotificationSettings(req, body) {
         return this.studentService.updateNotificationSettings(req.user.profileId, body);
     }
+    getSubscriptions(req) {
+        return this.studentService.getSubscriptions(req.user.profileId);
+    }
+    getSubscriptionByTeacher(req, teacherId) {
+        return this.studentService.getSubscriptionByTeacher(req.user.profileId, teacherId);
+    }
 };
 exports.StudentController = StudentController;
 __decorate([
@@ -185,6 +191,23 @@ __decorate([
     __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", void 0)
 ], StudentController.prototype, "updateNotificationSettings", null);
+__decorate([
+    (0, common_1.Get)('me/subscriptions'),
+    (0, swagger_1.ApiOperation)({ summary: 'Получить все абонементы ученика' }),
+    __param(0, (0, common_1.Request)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], StudentController.prototype, "getSubscriptions", null);
+__decorate([
+    (0, common_1.Get)('me/subscriptions/teacher/:teacherId'),
+    (0, swagger_1.ApiOperation)({ summary: 'Получить абонемент от конкретного учителя' }),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Param)('teacherId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], StudentController.prototype, "getSubscriptionByTeacher", null);
 exports.StudentController = StudentController = __decorate([
     (0, swagger_1.ApiTags)('students'),
     (0, common_1.Controller)('students'),

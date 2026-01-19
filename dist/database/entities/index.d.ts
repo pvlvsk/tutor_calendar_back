@@ -12,3 +12,4 @@ export * from "./lesson.entity";
 export * from "./lesson-student.entity";
 export * from "./lesson-series-student.entity";
 export * from "./student-notification-settings.entity";
+export * from "./subscription.entity";

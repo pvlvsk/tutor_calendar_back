@@ -33,6 +33,8 @@ export declare class BotService {
     }): Promise<boolean>;
     sendLessonReminders(): Promise<void>;
     private sendReminderForLesson;
+    notifyUserWelcome(telegramId: string | number, role: 'teacher' | 'student' | 'parent', teacherName?: string): Promise<boolean>;
+    notifyTeacherNewStudent(teacherTelegramId: string | number, studentName: string): Promise<boolean>;
     testSendMessage(telegramId: string | number, text: string, buttonText?: string): Promise<boolean>;
 }
 export {};

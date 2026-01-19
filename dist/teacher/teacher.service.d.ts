@@ -1,5 +1,5 @@
 import { Repository } from "typeorm";
-import { TeacherProfile, StudentProfile, Subject, TeacherStudentLink, Lesson, LessonSeries, LessonStudent, LessonSeriesStudent, Invitation, ParentStudentRelation } from "../database/entities";
+import { TeacherProfile, StudentProfile, Subject, TeacherStudentLink, Lesson, LessonSeries, LessonStudent, LessonSeriesStudent, Invitation, ParentStudentRelation, Subscription, SubscriptionType } from "../database/entities";
 import { StatsService, DebtService } from "../shared";
 import { LessonFilters } from "../shared/types";
 import { BotService } from "../bot/bot.service";
@@ -14,10 +14,11 @@ export declare class TeacherService {
     private invitationRepo;
     private parentRelationRepo;
     private studentProfileRepo;
+    private subscriptionRepo;
     private statsService;
     private debtService;
     private botService;
-    constructor(teacherProfileRepo: Repository<TeacherProfile>, subjectRepo: Repository<Subject>, linkRepo: Repository<TeacherStudentLink>, lessonRepo: Repository<Lesson>, seriesRepo: Repository<LessonSeries>, lessonStudentRepo: Repository<LessonStudent>, seriesStudentRepo: Repository<LessonSeriesStudent>, invitationRepo: Repository<Invitation>, parentRelationRepo: Repository<ParentStudentRelation>, studentProfileRepo: Repository<StudentProfile>, statsService: StatsService, debtService: DebtService, botService: BotService);
+    constructor(teacherProfileRepo: Repository<TeacherProfile>, subjectRepo: Repository<Subject>, linkRepo: Repository<TeacherStudentLink>, lessonRepo: Repository<Lesson>, seriesRepo: Repository<LessonSeries>, lessonStudentRepo: Repository<LessonStudent>, seriesStudentRepo: Repository<LessonSeriesStudent>, invitationRepo: Repository<Invitation>, parentRelationRepo: Repository<ParentStudentRelation>, studentProfileRepo: Repository<StudentProfile>, subscriptionRepo: Repository<Subscription>, statsService: StatsService, debtService: DebtService, botService: BotService);
     getProfile(teacherId: string): Promise<{
         id: string;
         displayName: string;
@@ -97,6 +98,18 @@ export declare class TeacherService {
         customFields: Record<string, string>;
         stats: import("../shared").AttendanceStats;
         debt: import("../shared").DebtInfo;
+        subscription: {
+            id: string;
+            type: SubscriptionType;
+            totalLessons: number | null;
+            usedLessons: number;
+            remainingLessons: number | null;
+            expiresAt: string | null;
+            name: string;
+            isExpired: boolean;
+            isActive: boolean;
+            createdAt: string;
+        } | null;
         parentInvite: {
             code: string;
             url: string;
@@ -114,6 +127,18 @@ export declare class TeacherService {
         customFields: Record<string, string>;
         stats: import("../shared").AttendanceStats;
         debt: import("../shared").DebtInfo;
+        subscription: {
+            id: string;
+            type: SubscriptionType;
+            totalLessons: number | null;
+            usedLessons: number;
+            remainingLessons: number | null;
+            expiresAt: string | null;
+            name: string;
+            isExpired: boolean;
+            isActive: boolean;
+            createdAt: string;
+        } | null;
         parentInvite: {
             code: string;
             url: string;
@@ -182,6 +207,8 @@ export declare class TeacherService {
             attendance: string;
             rating: number | null;
             paymentStatus: string;
+            paymentType: import("../database/entities").PaymentType;
+            paidFromSubscription: boolean;
         }[];
         subject: {
             name: string;
@@ -227,6 +254,8 @@ export declare class TeacherService {
             attendance: string;
             rating: number | null;
             paymentStatus: string;
+            paymentType: import("../database/entities").PaymentType;
+            paidFromSubscription: boolean;
         }[];
         subject: {
             name: string;
@@ -265,6 +294,8 @@ export declare class TeacherService {
             attendance: string;
             rating: number | null;
             paymentStatus: string;
+            paymentType: import("../database/entities").PaymentType;
+            paidFromSubscription: boolean;
         }[];
         subject: {
             name: string;
@@ -318,6 +349,8 @@ export declare class TeacherService {
             attendance: string;
             rating: number | null;
             paymentStatus: string;
+            paymentType: import("../database/entities").PaymentType;
+            paidFromSubscription: boolean;
         }[];
         subject: {
             name: string;
@@ -418,6 +451,8 @@ export declare class TeacherService {
             attendance: string;
             rating: number | null;
             paymentStatus: string;
+            paymentType: import("../database/entities").PaymentType;
+            paidFromSubscription: boolean;
         }[];
         subject: {
             name: string;
@@ -456,6 +491,8 @@ export declare class TeacherService {
             attendance: string;
             rating: number | null;
             paymentStatus: string;
+            paymentType: import("../database/entities").PaymentType;
+            paidFromSubscription: boolean;
         }[];
         subject: {
             name: string;
@@ -473,6 +510,7 @@ export declare class TeacherService {
         attendance: "attended" | "missed";
         rating?: number;
         paymentStatus?: "paid" | "unpaid";
+        useSubscription?: boolean;
     }>): Promise<{
         id: string;
         seriesId: string;
@@ -505,6 +543,8 @@ export declare class TeacherService {
             attendance: string;
             rating: number | null;
             paymentStatus: string;
+            paymentType: import("../database/entities").PaymentType;
+            paidFromSubscription: boolean;
         }[];
         subject: {
             name: string;
@@ -543,6 +583,8 @@ export declare class TeacherService {
             attendance: string;
             rating: number | null;
             paymentStatus: string;
+            paymentType: import("../database/entities").PaymentType;
+            paidFromSubscription: boolean;
         }[];
         subject: {
             name: string;
@@ -554,4 +596,51 @@ export declare class TeacherService {
     private formatLesson;
     private formatUserInfo;
     private notifyStudentsAboutNewLesson;
+    getStudentSubscription(teacherId: string, studentId: string): Promise<{
+        id: string;
+        type: SubscriptionType;
+        totalLessons: number | null;
+        usedLessons: number;
+        remainingLessons: number | null;
+        expiresAt: string | null;
+        name: string;
+        isExpired: boolean;
+        isActive: boolean;
+        createdAt: string;
+    } | null>;
+    createSubscription(teacherId: string, studentId: string, data: {
+        type: SubscriptionType;
+        totalLessons?: number;
+        expiresAt?: string;
+        name?: string;
+    }): Promise<{
+        id: string;
+        type: SubscriptionType;
+        totalLessons: number | null;
+        usedLessons: number;
+        remainingLessons: number | null;
+        expiresAt: string | null;
+        name: string;
+        isExpired: boolean;
+        isActive: boolean;
+        createdAt: string;
+    }>;
+    deleteSubscription(teacherId: string, subscriptionId: string): Promise<{
+        success: boolean;
+    }>;
+    restoreSubscription(teacherId: string, subscriptionId: string): Promise<{
+        id: string;
+        type: SubscriptionType;
+        totalLessons: number | null;
+        usedLessons: number;
+        remainingLessons: number | null;
+        expiresAt: string | null;
+        name: string;
+        isExpired: boolean;
+        isActive: boolean;
+        createdAt: string;
+    }>;
+    useSubscriptionLesson(teacherId: string, studentId: string): Promise<boolean>;
+    hasActiveSubscription(teacherId: string, studentId: string): Promise<boolean>;
+    private formatSubscription;
 }

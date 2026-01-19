@@ -11,6 +11,8 @@ import {
 import { Lesson } from "./lesson.entity";
 import { StudentProfile } from "./student-profile.entity";
 
+export type PaymentType = "fixed" | "free" | "subscription";
+
 @Entity("lesson_students")
 @Unique(["lessonId", "studentId"])
 export class LessonStudent {
@@ -34,6 +36,14 @@ export class LessonStudent {
 
   @Column({ default: "unpaid" })
   paymentStatus: string;
+
+  // Тип оплаты: фиксированная цена / бесплатно / по абонементу
+  @Column({ type: "varchar", length: 20, default: "fixed" })
+  paymentType: PaymentType;
+
+  // Было ли списано с абонемента (при проведении урока)
+  @Column({ default: false })
+  paidFromSubscription: boolean;
 
   @CreateDateColumn()
   createdAt: Date;

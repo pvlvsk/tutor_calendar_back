@@ -2,14 +2,17 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: teach-postgres
-    env_file:
-      - .env.production
+    environment:
+      TZ: Europe/Moscow
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-teach_mini_app}
     ports:
-      - "5432:5432"
+      - "${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -21,9 +24,11 @@ services:
       dockerfile: Dockerfile
     container_name: teach-backend
     env_file:
-      - .env.production
+      - .env
     environment:
-      NODE_ENV: production
+      TZ: Europe/Moscow
+      NODE_ENV: ${NODE_ENV:-development}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-teach_mini_app}
     ports:
       - "${BACKEND_PORT:-3000}:3000"
     depends_on:

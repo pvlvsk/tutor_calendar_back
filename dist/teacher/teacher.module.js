@@ -30,6 +30,7 @@ exports.TeacherModule = TeacherModule = __decorate([
                 entities_1.LessonSeriesStudent,
                 entities_1.Invitation,
                 entities_1.ParentStudentRelation,
+                entities_1.Subscription,
             ]),
             bot_module_1.BotModule,
         ],

@@ -20,13 +20,14 @@ const entities_1 = require("../database/entities");
 const shared_1 = require("../shared");
 const utils_1 = require("../shared/utils");
 let StudentService = class StudentService {
-    constructor(studentProfileRepo, linkRepo, lessonRepo, lessonStudentRepo, notificationSettingsRepo, subjectRepo, statsService, achievementsService) {
+    constructor(studentProfileRepo, linkRepo, lessonRepo, lessonStudentRepo, notificationSettingsRepo, subjectRepo, subscriptionRepo, statsService, achievementsService) {
         this.studentProfileRepo = studentProfileRepo;
         this.linkRepo = linkRepo;
         this.lessonRepo = lessonRepo;
         this.lessonStudentRepo = lessonStudentRepo;
         this.notificationSettingsRepo = notificationSettingsRepo;
         this.subjectRepo = subjectRepo;
+        this.subscriptionRepo = subscriptionRepo;
         this.statsService = statsService;
         this.achievementsService = achievementsService;
     }
@@ -340,6 +341,49 @@ let StudentService = class StudentService {
         await this.notificationSettingsRepo.save(settings);
         return this.getNotificationSettings(studentId);
     }
+    async getSubscriptions(studentId) {
+        const subscriptions = await this.subscriptionRepo.find({
+            where: { studentId },
+            relations: ["teacher", "teacher.user"],
+            order: { createdAt: "DESC" },
+        });
+        return subscriptions.map((sub) => this.formatSubscription(sub));
+    }
+    async getSubscriptionByTeacher(studentId, teacherId) {
+        const subscription = await this.subscriptionRepo.findOne({
+            where: { studentId, teacherId, deletedAt: null },
+            relations: ["teacher", "teacher.user"],
+        });
+        if (!subscription)
+            return null;
+        return this.formatSubscription(subscription);
+    }
+    formatSubscription(subscription) {
+        const remainingLessons = subscription.type === "lessons" && subscription.totalLessons !== null
+            ? Math.max(0, subscription.totalLessons - subscription.usedLessons)
+            : null;
+        const isExpired = subscription.type === "lessons"
+            ? remainingLessons === 0
+            : subscription.expiresAt
+                ? new Date() > subscription.expiresAt
+                : false;
+        return {
+            id: subscription.id,
+            teacherId: subscription.teacherId,
+            teacherName: subscription.teacher?.displayName ||
+                subscription.teacher?.user?.firstName ||
+                "Учитель",
+            type: subscription.type,
+            totalLessons: subscription.totalLessons,
+            usedLessons: subscription.usedLessons,
+            remainingLessons,
+            expiresAt: subscription.expiresAt?.toISOString() || null,
+            name: subscription.name,
+            isExpired,
+            isActive: !subscription.deletedAt && !isExpired,
+            createdAt: subscription.createdAt.toISOString(),
+        };
+    }
     formatUserInfo(user) {
         return {
             id: user.id,
@@ -358,7 +402,9 @@ exports.StudentService = StudentService = __decorate([
     __param(3, (0, typeorm_1.InjectRepository)(entities_1.LessonStudent)),
     __param(4, (0, typeorm_1.InjectRepository)(entities_1.StudentNotificationSettings)),
     __param(5, (0, typeorm_1.InjectRepository)(entities_1.Subject)),
+    __param(6, (0, typeorm_1.InjectRepository)(entities_1.Subscription)),
     __metadata("design:paramtypes", [typeorm_2.Repository,
+        typeorm_2.Repository,
         typeorm_2.Repository,
         typeorm_2.Repository,
         typeorm_2.Repository,

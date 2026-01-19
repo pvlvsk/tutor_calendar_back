@@ -101,4 +101,16 @@ export class StudentController {
   updateNotificationSettings(@Request() req: any, @Body() body: any) {
     return this.studentService.updateNotificationSettings(req.user.profileId, body)
   }
+
+  @Get('me/subscriptions')
+  @ApiOperation({ summary: 'Получить все абонементы ученика' })
+  getSubscriptions(@Request() req: any) {
+    return this.studentService.getSubscriptions(req.user.profileId)
+  }
+
+  @Get('me/subscriptions/teacher/:teacherId')
+  @ApiOperation({ summary: 'Получить абонемент от конкретного учителя' })
+  getSubscriptionByTeacher(@Request() req: any, @Param('teacherId') teacherId: string) {
+    return this.studentService.getSubscriptionByTeacher(req.user.profileId, teacherId)
+  }
 }
