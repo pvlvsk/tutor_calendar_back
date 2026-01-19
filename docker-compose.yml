@@ -7,8 +7,9 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-teach_mini_app}
-    ports:
-      - "${DB_PORT:-5432}:5432"
+    # Порт доступен только внутри Docker сети (безопасно)
+    expose:
+      - "5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
