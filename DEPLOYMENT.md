@@ -55,12 +55,51 @@ BETA_CODE=beta_2025
 docker compose up -d --build
 ```
 
-### 5. Проверить
+### 5. Настроить postgres (после первого запуска)
+
+```bash
+# Установить пароль (обязательно после первого запуска!)
+docker exec -it teach-postgres psql -U postgres -c "ALTER USER postgres WITH PASSWORD 'ваш_пароль_из_env';"
+
+# Установить московское время для логов
+docker exec -it teach-postgres psql -U postgres -c "ALTER SYSTEM SET log_timezone = 'Europe/Moscow';"
+docker exec -it teach-postgres psql -U postgres -c "SELECT pg_reload_conf();"
+```
+
+### 6. Проверить
 
 ```bash
 docker compose ps
 curl http://localhost:3000/api/health
+docker compose logs --tail=10  # Время должно быть MSK
 ```
+
+---
+
+## 🔒 Безопасность
+
+### Postgres не открыт наружу
+
+В `docker-compose.yml` postgres использует `expose` вместо `ports`:
+
+```yaml
+postgres:
+  expose:
+    - "5432" # Доступен только внутри Docker сети
+```
+
+Это защищает от:
+
+- Сканеров и ботов, пытающихся подключиться к БД
+- Brute-force атак на пароль postgres
+
+### Подключение к БД
+
+- **Backend** — подключается через Docker сеть (`postgres:5432`)
+- **DBeaver/pgAdmin** — через SSH туннель (см. раздел ниже)
+- **Извне** — порт 5432 закрыт
+
+---
 
 ## Сборка без тестов
 
@@ -80,11 +119,14 @@ docker compose down -v        # Удалить данные
 
 ```bash
 docker run -d -p 9000:9000 --name portainer --restart=always \
+  -e TZ=Europe/Moscow \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v portainer_data:/data portainer/portainer-ce:latest
 ```
 
 URL: http://IP:9000
+
+> **Важно:** Timezone в Portainer влияет только на его интерфейс. Логи контейнеров показываются в их timezone (настраивается в `docker-compose.yml` через `TZ: Europe/Moscow`).
 
 ## Переменные .env
 
@@ -93,12 +135,33 @@ URL: http://IP:9000
 - JWT_SECRET - секрет JWT (мин 32 символа)
 - BOT_TOKEN - токен от BotFather
 
-## DBeaver подключение
+## DBeaver подключение (через SSH туннель)
 
-- Host: IP сервера
-- Port: 5432
-- Database: teach_mini_app
-- User/Pass: из .env
+Порт postgres **не открыт наружу** для безопасности. Подключение через SSH туннель:
+
+### Настройка в DBeaver
+
+**Main tab:**
+
+- Host: `localhost`
+- Port: `5432`
+- Database: `teach_mini_app`
+- Username: `postgres`
+- Password: из `.env` (POSTGRES_PASSWORD)
+
+**SSH tab:**
+
+- ☑️ Use SSH Tunnel
+- Host: `IP_вашего_сервера`
+- Port: `22`
+- Username: `root`
+- Authentication: Password или SSH Key
+
+**Схема подключения:**
+
+```
+DBeaver → SSH туннель (сервер:22) → localhost:5432 → postgres контейнер
+```
 
 ---
 
@@ -418,4 +481,74 @@ curl https://api.quickbotics.ru/api/health
 
 # Проверка БД
 docker compose exec postgres pg_isready -U postgres
+```
+
+---
+
+## Troubleshooting
+
+### Ошибка "password authentication failed for user postgres"
+
+**Симптомы:** В логах postgres постоянно появляется:
+
+```
+FATAL: password authentication failed for user "postgres"
+Connection matched file "pg_hba.conf" line 128: "host all all all scram-sha-256"
+```
+
+**Причины:**
+
+1. Пароль не установлен после первого запуска
+2. Порт 5432 открыт в интернет и боты пытаются подключиться
+
+**Решение:**
+
+```bash
+# 1. Установить пароль
+docker exec -it teach-postgres psql -U postgres -c "ALTER USER postgres WITH PASSWORD 'ваш_пароль';"
+
+# 2. Перезапустить backend
+docker compose restart backend
+
+# 3. Проверить что порт postgres НЕ открыт наружу
+netstat -an | grep 5432
+# Должно быть пусто или 127.0.0.1:5432
+# Если 0.0.0.0:5432 — порт открыт, обновите docker-compose.yml
+```
+
+### Логи показывают время UTC вместо MSK
+
+```bash
+# Установить московское время
+docker exec -it teach-postgres psql -U postgres -c "ALTER SYSTEM SET log_timezone = 'Europe/Moscow';"
+docker exec -it teach-postgres psql -U postgres -c "SELECT pg_reload_conf();"
+```
+
+### Volume не удаляется
+
+```bash
+# Остановить контейнеры
+docker compose down
+
+# Удалить volume принудительно
+docker volume rm tutor_calendar_back_postgres_data -f
+
+# Удалить все неиспользуемые volumes
+docker volume prune -f
+```
+
+### Полный сброс
+
+```bash
+# Остановить и удалить ВСЁ
+docker compose down -v
+docker system prune -af --volumes
+
+# Заново запустить
+docker compose up -d --build
+
+# Настроить пароль и timezone
+docker exec -it teach-postgres psql -U postgres -c "ALTER USER postgres WITH PASSWORD 'postgres123';"
+docker exec -it teach-postgres psql -U postgres -c "ALTER SYSTEM SET log_timezone = 'Europe/Moscow';"
+docker exec -it teach-postgres psql -U postgres -c "SELECT pg_reload_conf();"
 ```

@@ -1,0 +1,1056 @@
+{
+    "info": {
+        "name": "Teach Mini App API",
+        "description": "API для приложения репетитора",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "variable": [
+        {
+            "key": "baseUrl",
+            "value": "http://localhost:3000/api"
+        },
+        {
+            "key": "token",
+            "value": ""
+        },
+        {
+            "key": "initData",
+            "value": "test"
+        },
+        {
+            "key": "teacherReferralCode",
+            "value": ""
+        },
+        {
+            "key": "parentInviteCode",
+            "value": ""
+        },
+        {
+            "key": "studentToken",
+            "value": ""
+        },
+        {
+            "key": "parentToken",
+            "value": ""
+        }
+    ],
+    "auth": {
+        "type": "bearer",
+        "bearer": [
+            {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "string"
+            }
+        ]
+    },
+    "item": [
+        {
+            "name": "Auth",
+            "item": [
+                {
+                    "name": "1. Init (проверка пользователя)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "var jsonData = pm.response.json();",
+                                    "if (jsonData.token) {",
+                                    "    pm.collectionVariables.set('token', jsonData.token);",
+                                    "}"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"initData\": \"{{initData}}\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/auth/init",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "init"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "2. Register Teacher",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "var jsonData = pm.response.json();",
+                                    "if (jsonData.token) {",
+                                    "    pm.collectionVariables.set('token', jsonData.token);",
+                                    "}"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"initData\": \"{{initData}}\",\n  \"role\": \"teacher\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/auth/register",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "register"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "2b. Register Student (другой юзер)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "var jsonData = pm.response.json();",
+                                    "if (jsonData.token) {",
+                                    "    pm.collectionVariables.set('studentToken', jsonData.token);",
+                                    "}"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"initData\": \"user={\\\"id\\\":222,\\\"first_name\\\":\\\"Петя\\\",\\\"last_name\\\":\\\"Иванов\\\",\\\"username\\\":\\\"petya\\\"}\",\n  \"role\": \"student\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/auth/register",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "register"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "3a. Join as Student (по ссылке учителя)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "var jsonData = pm.response.json();",
+                                    "if (jsonData.token) {",
+                                    "    pm.collectionVariables.set('studentToken', jsonData.token);",
+                                    "}",
+                                    "if (jsonData.parentInviteCode) {",
+                                    "    pm.collectionVariables.set('parentInviteCode', jsonData.parentInviteCode);",
+                                    "}"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"initData\": \"user={\\\"id\\\":333,\\\"first_name\\\":\\\"Петя\\\",\\\"last_name\\\":\\\"Иванов\\\"}\",\n  \"referralCode\": \"T_YOUR_TEACHER_CODE\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/auth/join",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "join"
+                            ]
+                        },
+                        "description": "Присоединиться как ученик по постоянной ссылке учителя. Код начинается с T_"
+                    }
+                },
+                {
+                    "name": "3b. Join as Parent (по ссылке ученика)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "var jsonData = pm.response.json();",
+                                    "if (jsonData.token) {",
+                                    "    pm.collectionVariables.set('parentToken', jsonData.token);",
+                                    "}"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"initData\": \"user={\\\"id\\\":444,\\\"first_name\\\":\\\"Мама\\\",\\\"last_name\\\":\\\"Иванова\\\"}\",\n  \"referralCode\": \"{{parentInviteCode}}\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/auth/join",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "join"
+                            ]
+                        },
+                        "description": "Присоединиться как родитель по ссылке ученика. Код начинается с P_"
+                    }
+                },
+                {
+                    "name": "3c. Accept Invitation (устаревший)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "var jsonData = pm.response.json();",
+                                    "if (jsonData.token) {",
+                                    "    pm.collectionVariables.set('token', jsonData.token);",
+                                    "}"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"initData\": \"user={\\\"id\\\":333,\\\"first_name\\\":\\\"Новый\\\",\\\"last_name\\\":\\\"Ученик\\\"}\",\n  \"invitationToken\": \"INV_YOUR_TOKEN_HERE\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/auth/accept-invitation",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "accept-invitation"
+                            ]
+                        },
+                        "description": "Устаревший метод. Используйте /auth/join"
+                    }
+                },
+                {
+                    "name": "4. Get Me",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{baseUrl}}/auth/me",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "me"
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Teacher",
+            "item": [
+                {
+                    "name": "Profile",
+                    "item": [
+                        {
+                            "name": "Get Profile",
+                            "request": {
+                                "method": "GET",
+                                "url": {
+                                    "raw": "{{baseUrl}}/teachers/me",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "teachers",
+                                        "me"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "Get Invite Link",
+                            "event": [
+                                {
+                                    "listen": "test",
+                                    "script": {
+                                        "exec": [
+                                            "var jsonData = pm.response.json();",
+                                            "if (jsonData.referralCode) {",
+                                            "    pm.collectionVariables.set('teacherReferralCode', jsonData.referralCode);",
+                                            "}"
+                                        ],
+                                        "type": "text/javascript"
+                                    }
+                                }
+                            ],
+                            "request": {
+                                "method": "GET",
+                                "url": {
+                                    "raw": "{{baseUrl}}/teachers/me/invite-link",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "teachers",
+                                        "me",
+                                        "invite-link"
+                                    ]
+                                },
+                                "description": "Получить постоянную ссылку для приглашения учеников. Эту ссылку можно разместить в соцсетях, на визитке и т.д."
+                            }
+                        },
+                        {
+                            "name": "Update Profile",
+                            "request": {
+                                "method": "PATCH",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"displayName\": \"Иван Петров\",\n  \"bio\": \"Репетитор по математике, 10 лет опыта\"\n}"
+                                },
+                                "url": {
+                                    "raw": "{{baseUrl}}/teachers/me",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "teachers",
+                                        "me"
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Subjects",
+                    "item": [
+                        {
+                            "name": "Get Subjects",
+                            "request": {
+                                "method": "GET",
+                                "url": {
+                                    "raw": "{{baseUrl}}/teachers/me/subjects",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "teachers",
+                                        "me",
+                                        "subjects"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "Create Subject",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"name\": \"Математика (ЕГЭ)\",\n  \"code\": \"math-ege\",\n  \"colorHex\": \"#4CAF50\"\n}"
+                                },
+                                "url": {
+                                    "raw": "{{baseUrl}}/teachers/me/subjects",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "teachers",
+                                        "me",
+                                        "subjects"
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Students",
+                    "item": [
+                        {
+                            "name": "Get Students",
+                            "request": {
+                                "method": "GET",
+                                "url": {
+                                    "raw": "{{baseUrl}}/teachers/me/students",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "teachers",
+                                        "me",
+                                        "students"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "Create Student Invitation",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{baseUrl}}/teachers/me/students/invitations",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "teachers",
+                                        "me",
+                                        "students",
+                                        "invitations"
+                                    ]
+                                },
+                                "description": "Создаёт ссылку-приглашение для ученика. Ученик переходит по ссылке и автоматически связывается с учителем."
+                            }
+                        },
+                        {
+                            "name": "Get Student Details",
+                            "request": {
+                                "method": "GET",
+                                "url": {
+                                    "raw": "{{baseUrl}}/teachers/me/students/:studentId",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "teachers",
+                                        "me",
+                                        "students",
+                                        ":studentId"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "studentId",
+                                            "value": "YOUR_STUDENT_ID"
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Lessons",
+                    "item": [
+                        {
+                            "name": "Get Lessons",
+                            "request": {
+                                "method": "GET",
+                                "url": {
+                                    "raw": "{{baseUrl}}/teachers/me/lessons?from=2025-01-01&to=2025-12-31",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "teachers",
+                                        "me",
+                                        "lessons"
+                                    ],
+                                    "query": [
+                                        {
+                                            "key": "from",
+                                            "value": "2025-01-01"
+                                        },
+                                        {
+                                            "key": "to",
+                                            "value": "2025-12-31"
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "Create Lesson (простой)",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"subjectId\": \"YOUR_SUBJECT_ID\",\n  \"startAt\": \"2025-01-15T10:00:00Z\",\n  \"durationMinutes\": 60,\n  \"priceRub\": 2000\n}"
+                                },
+                                "url": {
+                                    "raw": "{{baseUrl}}/teachers/me/lessons",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "teachers",
+                                        "me",
+                                        "lessons"
+                                    ]
+                                },
+                                "description": "Создать урок без ученика (слот). Ученика можно добавить позже."
+                            }
+                        },
+                        {
+                            "name": "Create Lesson (с учеником)",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"studentId\": \"YOUR_STUDENT_ID\",\n  \"subjectId\": \"YOUR_SUBJECT_ID\",\n  \"startAt\": \"2025-01-15T10:00:00Z\",\n  \"durationMinutes\": 60,\n  \"priceRub\": 2000\n}"
+                                },
+                                "url": {
+                                    "raw": "{{baseUrl}}/teachers/me/lessons",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "teachers",
+                                        "me",
+                                        "lessons"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "Create Recurring Lessons (еженедельно)",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"subjectId\": \"YOUR_SUBJECT_ID\",\n  \"startAt\": \"2025-01-14T09:00:00Z\",\n  \"durationMinutes\": 60,\n  \"priceRub\": 2000,\n  \"recurrence\": {\n    \"frequency\": \"weekly\",\n    \"count\": 10\n  }\n}"
+                                },
+                                "url": {
+                                    "raw": "{{baseUrl}}/teachers/me/lessons",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "teachers",
+                                        "me",
+                                        "lessons"
+                                    ]
+                                },
+                                "description": "Создать серию уроков. frequency: weekly | biweekly. Можно указать count (количество) или endDate (до какой даты)."
+                            }
+                        },
+                        {
+                            "name": "Create Recurring Lessons (раз в 2 недели)",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"studentId\": \"YOUR_STUDENT_ID\",\n  \"subjectId\": \"YOUR_SUBJECT_ID\",\n  \"startAt\": \"2025-01-14T09:00:00Z\",\n  \"durationMinutes\": 60,\n  \"priceRub\": 2000,\n  \"recurrence\": {\n    \"frequency\": \"biweekly\",\n    \"endDate\": \"2025-06-01\"\n  }\n}"
+                                },
+                                "url": {
+                                    "raw": "{{baseUrl}}/teachers/me/lessons",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "teachers",
+                                        "me",
+                                        "lessons"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "Get Lesson Details",
+                            "request": {
+                                "method": "GET",
+                                "url": {
+                                    "raw": "{{baseUrl}}/teachers/me/lessons/:lessonId",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "teachers",
+                                        "me",
+                                        "lessons",
+                                        ":lessonId"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "lessonId",
+                                            "value": "YOUR_LESSON_ID"
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "Update Lesson (назначить ученика)",
+                            "request": {
+                                "method": "PATCH",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"studentId\": \"YOUR_STUDENT_ID\"\n}"
+                                },
+                                "url": {
+                                    "raw": "{{baseUrl}}/teachers/me/lessons/:lessonId",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "teachers",
+                                        "me",
+                                        "lessons",
+                                        ":lessonId"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "lessonId",
+                                            "value": "YOUR_LESSON_ID"
+                                        }
+                                    ]
+                                },
+                                "description": "Назначить или сменить ученика на уроке"
+                            }
+                        },
+                        {
+                            "name": "Update Lesson (статус/оплата)",
+                            "request": {
+                                "method": "PATCH",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"status\": \"done\",\n  \"attendance\": \"attended\",\n  \"lessonReport\": \"Разобрали тему, хорошо справился\"\n}"
+                                },
+                                "url": {
+                                    "raw": "{{baseUrl}}/teachers/me/lessons/:lessonId",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "teachers",
+                                        "me",
+                                        "lessons",
+                                        ":lessonId"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "lessonId",
+                                            "value": "YOUR_LESSON_ID"
+                                        }
+                                    ]
+                                },
+                                "description": "status: planned | done | cancelled. attendance: attended | missed. lessonReport: как прошёл урок (один раз при смене статуса)"
+                            }
+                        },
+                        {
+                            "name": "Update Lesson (комментарий)",
+                            "request": {
+                                "method": "PATCH",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"teacherNote\": \"Не забудь взять тетрадь\"\n}"
+                                },
+                                "url": {
+                                    "raw": "{{baseUrl}}/teachers/me/lessons/:lessonId",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "teachers",
+                                        "me",
+                                        "lessons",
+                                        ":lessonId"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "lessonId",
+                                            "value": "YOUR_LESSON_ID"
+                                        }
+                                    ]
+                                },
+                                "description": "Обновить комментарий к уроку. Автоматически обновляется teacherNoteUpdatedAt"
+                            }
+                        },
+                        {
+                            "name": "Update Series (все будущие)",
+                            "request": {
+                                "method": "PATCH",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"studentId\": \"NEW_STUDENT_ID\",\n  \"priceRub\": 2500\n}"
+                                },
+                                "url": {
+                                    "raw": "{{baseUrl}}/teachers/me/lessons/:lessonId?applyToSeries=future",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "teachers",
+                                        "me",
+                                        "lessons",
+                                        ":lessonId"
+                                    ],
+                                    "query": [
+                                        {
+                                            "key": "applyToSeries",
+                                            "value": "future",
+                                            "description": "this | future | all"
+                                        }
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "lessonId",
+                                            "value": "YOUR_LESSON_ID"
+                                        }
+                                    ]
+                                },
+                                "description": "Применить изменения ко всем будущим урокам серии"
+                            }
+                        },
+                        {
+                            "name": "Delete Lesson",
+                            "request": {
+                                "method": "DELETE",
+                                "url": {
+                                    "raw": "{{baseUrl}}/teachers/me/lessons/:lessonId",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "teachers",
+                                        "me",
+                                        "lessons",
+                                        ":lessonId"
+                                    ],
+                                    "variable": [
+                                        {
+                                            "key": "lessonId",
+                                            "value": "YOUR_LESSON_ID"
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "Get Lesson Series",
+                            "request": {
+                                "method": "GET",
+                                "url": {
+                                    "raw": "{{baseUrl}}/teachers/me/lesson-series",
+                                    "host": [
+                                        "{{baseUrl}}"
+                                    ],
+                                    "path": [
+                                        "teachers",
+                                        "me",
+                                        "lesson-series"
+                                    ]
+                                },
+                                "description": "Получить все серии повторяющихся уроков"
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Student",
+            "item": [
+                {
+                    "name": "Get Profile",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{baseUrl}}/students/me",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "students",
+                                "me"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Get Teachers",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{baseUrl}}/students/me/teachers",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "students",
+                                "me",
+                                "teachers"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Get Lessons",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{baseUrl}}/students/me/lessons?from=2025-01-01&to=2025-12-31",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "students",
+                                "me",
+                                "lessons"
+                            ],
+                            "query": [
+                                {
+                                    "key": "from",
+                                    "value": "2025-01-01"
+                                },
+                                {
+                                    "key": "to",
+                                    "value": "2025-12-31"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Cancel Lesson (by student)",
+                    "request": {
+                        "method": "POST",
+                        "url": {
+                            "raw": "{{baseUrl}}/students/me/lessons/:lessonId/cancel",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "students",
+                                "me",
+                                "lessons",
+                                ":lessonId",
+                                "cancel"
+                            ],
+                            "variable": [
+                                {
+                                    "key": "lessonId",
+                                    "value": "YOUR_LESSON_ID"
+                                }
+                            ]
+                        },
+                        "description": "Отмена урока учеником. Урок должен быть со статусом planned."
+                    }
+                },
+                {
+                    "name": "Get Stats",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{baseUrl}}/students/me/stats",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "students",
+                                "me",
+                                "stats"
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Parent",
+            "item": [
+                {
+                    "name": "Get Profile",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{baseUrl}}/parents/me",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "parents",
+                                "me"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Get Children",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{baseUrl}}/parents/me/children",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "parents",
+                                "me",
+                                "children"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Get Child Lessons",
+                    "request": {
+                        "method": "GET",
+                        "url": {
+                            "raw": "{{baseUrl}}/parents/me/children/:childId/lessons?from=2025-01-01&to=2025-12-31",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "parents",
+                                "me",
+                                "children",
+                                ":childId",
+                                "lessons"
+                            ],
+                            "query": [
+                                {
+                                    "key": "from",
+                                    "value": "2025-01-01"
+                                },
+                                {
+                                    "key": "to",
+                                    "value": "2025-12-31"
+                                }
+                            ],
+                            "variable": [
+                                {
+                                    "key": "childId",
+                                    "value": "YOUR_CHILD_ID"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ]
+        }
+    ]
+}
