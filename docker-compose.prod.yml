@@ -1,3 +1,6 @@
+# Production конфигурация
+# Использование: docker compose -f docker-compose.prod.yml up -d --build
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -7,9 +10,10 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-teach_mini_app}
-    # DEV: порт открыт для DBeaver/pgAdmin
+    # PROD: порт доступен только на localhost (для SSH туннеля)
+    # НЕ открыт в интернет — безопасно
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -28,7 +32,7 @@ services:
       - .env
     environment:
       TZ: Europe/Moscow
-      NODE_ENV: ${NODE_ENV:-development}
+      NODE_ENV: production
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-teach_mini_app}
     ports:
       - "${BACKEND_PORT:-3000}:3000"
@@ -39,4 +43,3 @@ services:
 
 volumes:
   postgres_data:
-
