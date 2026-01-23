@@ -212,23 +212,46 @@ DBeaver → localhost:5433 → SSH туннель → сервер:5432 → post
 
 ## Доставка изменений
 
-### Через Git (рекомендуется)
+### Быстрый деплой (рекомендуется, даунтайм ~3 сек)
 
 ```bash
-# На сервере
+cd ~/tutor_calendar_back
+git pull origin main
+
+# Собрать новый образ без остановки старого
+docker compose -f docker-compose.prod.yml build backend
+
+# Перезапустить только backend (postgres остаётся)
+docker compose -f docker-compose.prod.yml up -d --no-deps backend
+
+# Проверить
+sleep 3
+curl http://localhost:3000/api/health
+```
+
+### Скрипт для деплоя
+
+Скрипт `deploy.sh` уже есть в репозитории. Первый раз сделай его исполняемым:
+
+```bash
+chmod +x deploy.sh
+```
+
+Использование:
+
+```bash
+./deploy.sh
+```
+
+### Полная пересборка (с даунтаймом)
+
+Если нужно пересобрать всё (например, изменились зависимости):
+
+```bash
 cd ~/tutor_calendar_back
 git pull origin main
 docker compose -f docker-compose.prod.yml down
 docker compose -f docker-compose.prod.yml up -d --build
-```
-
-### Быстрое обновление (только код)
-
-```bash
-cd ~/tutor_calendar_back
-git pull origin main
-docker compose -f docker-compose.prod.yml exec backend sh -c "rm -rf dist && npm run build:no-tests"
-docker compose -f docker-compose.prod.yml restart backend
 ```
 
 ---
