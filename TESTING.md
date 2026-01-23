@@ -19,17 +19,17 @@ npm run test
 
 | Файл           | Описание                 |
 | -------------- | ------------------------ |
-| `ENV.QA.TXT`   | Шаблон для QA/разработки |
-| `ENV.PROD.TXT` | Шаблон для продакшена    |
+| `.env.dev.example`   | Шаблон для QA/разработки |
+| `.env.production.example` | Шаблон для продакшена    |
 
 ### Копирование шаблона в `.env`
 
 ```bash
 # QA / Локальная разработка
-cp ENV.QA.TXT .env
+cp .env.dev.example .env
 
 # Production
-cp ENV.PROD.TXT .env
+cp .env.production.example .env
 ```
 
 > ⚠️ После копирования **замените `CHANGE_ME`** на реальные значения!
@@ -282,7 +282,7 @@ describe("AuthController (HTTP)", () => {
 
 ## Переменные окружения
 
-### ENV.QA.TXT (QA / Разработка)
+### .env.dev.example (QA / Разработка)
 
 ```env
 NODE_ENV=development
@@ -297,7 +297,7 @@ BOT_TOKEN=your-telegram-bot-token
 BOT_USERNAME=your_bot_username
 ```
 
-### ENV.PROD.TXT (Production)
+### .env.production.example (Production)
 
 ```env
 NODE_ENV=production

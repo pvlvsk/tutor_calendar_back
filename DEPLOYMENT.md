@@ -27,7 +27,7 @@ cd tutor_calendar_back
 Используй шаблон для продакшена:
 
 ```bash
-cp ENV.PROD.TXT .env
+cp .env.production.example .env
 nano .env  # Заполни реальными данными
 ```
 
@@ -47,7 +47,7 @@ BOT_USERNAME=your_bot
 BETA_CODE=beta_2025
 ```
 
-> **Шаблоны:** `ENV.QA.TXT` - для локальной разработки, `ENV.PROD.TXT` - для продакшена
+> **Шаблоны:** `.env.dev.example` - для локальной разработки, `.env.production.example` - для продакшена
 
 ### 4. Запустить
 
