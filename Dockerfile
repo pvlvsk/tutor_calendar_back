@@ -7,7 +7,7 @@ RUN npm ci
 
 COPY . .
 
-# Используем build:no-tests для быстрой сборки на сервере
+# Сборка без тестов (тесты запускаются локально перед деплоем)
 RUN npm run build:no-tests
 
 EXPOSE 3000

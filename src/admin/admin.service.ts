@@ -398,19 +398,22 @@ export class AdminService {
     from: Date,
     to: Date,
     limit: number = 10
-  ): Promise<{ eventName: string; count: number }[]> {
+  ): Promise<{ eventName: string; category: string | null; count: number }[]> {
     const result = await this.analyticsEventRepo
       .createQueryBuilder("e")
       .select("e.eventName", "eventName")
+      .addSelect("e.category", "category")
       .addSelect("COUNT(*)", "count")
       .where("e.createdAt BETWEEN :from AND :to", { from, to })
       .groupBy("e.eventName")
+      .addGroupBy("e.category")
       .orderBy("count", "DESC")
       .limit(limit)
       .getRawMany();
 
     return result.map((r) => ({
       eventName: r.eventName,
+      category: r.category,
       count: parseInt(r.count),
     }));
   }
