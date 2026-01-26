@@ -81,7 +81,7 @@ export declare class StudentService {
         id: string;
         seriesId: string;
         teacherId: string;
-        subjectId: string;
+        subjectId: string | null;
         startAt: string;
         durationMinutes: number;
         status: string;
@@ -101,14 +101,14 @@ export declare class StudentService {
             lastName: string;
         };
         subject: {
-            name: string;
-            colorHex: string;
+            name: string | undefined;
+            colorHex: string | undefined;
         };
     }[]>;
     getLessonDetails(studentId: string, lessonId: string): Promise<{
         id: string;
         teacherId: string;
-        subjectId: string;
+        subjectId: string | null;
         startAt: string;
         durationMinutes: number;
         status: string;
@@ -131,8 +131,8 @@ export declare class StudentService {
             username: string;
         };
         subject: {
-            name: string;
-            colorHex: string;
+            name: string | undefined;
+            colorHex: string | undefined;
         };
         createdAt: string;
         updatedAt: string;
@@ -144,7 +144,7 @@ export declare class StudentService {
     }): Promise<{
         id: string;
         teacherId: string;
-        subjectId: string;
+        subjectId: string | null;
         startAt: string;
         durationMinutes: number;
         status: string;
@@ -167,8 +167,8 @@ export declare class StudentService {
             username: string;
         };
         subject: {
-            name: string;
-            colorHex: string;
+            name: string | undefined;
+            colorHex: string | undefined;
         };
         createdAt: string;
         updatedAt: string;
@@ -176,7 +176,7 @@ export declare class StudentService {
     cancelLesson(studentId: string, lessonId: string): Promise<{
         id: string;
         teacherId: string;
-        subjectId: string;
+        subjectId: string | null;
         startAt: string;
         durationMinutes: number;
         status: string;
@@ -199,8 +199,8 @@ export declare class StudentService {
             username: string;
         };
         subject: {
-            name: string;
-            colorHex: string;
+            name: string | undefined;
+            colorHex: string | undefined;
         };
         createdAt: string;
         updatedAt: string;

@@ -108,7 +108,7 @@ export declare class ParentService {
     getChildLessons(parentId: string, childId: string, from: string, to: string, filters?: LessonFilters): Promise<{
         id: string;
         teacherId: string;
-        subjectId: string;
+        subjectId: string | null;
         startAt: string;
         durationMinutes: number;
         priceRub: number;
@@ -125,14 +125,14 @@ export declare class ParentService {
             lastName: string;
         };
         subject: {
-            name: string;
-            colorHex: string;
+            name: string | undefined;
+            colorHex: string | undefined;
         };
     }[]>;
     getChildLessonDetails(parentId: string, childId: string, lessonId: string): Promise<{
         id: string;
         teacherId: string;
-        subjectId: string;
+        subjectId: string | null;
         startAt: string;
         durationMinutes: number;
         priceRub: number;
@@ -151,8 +151,8 @@ export declare class ParentService {
             username: string;
         };
         subject: {
-            name: string;
-            colorHex: string;
+            name: string | undefined;
+            colorHex: string | undefined;
         };
         createdAt: string;
         updatedAt: string;

@@ -13,3 +13,8 @@ export * from "./lesson-student.entity";
 export * from "./lesson-series-student.entity";
 export * from "./student-notification-settings.entity";
 export * from "./subscription.entity";
+
+// Admin & Analytics
+export * from "./admin-user.entity";
+export * from "./request-log.entity";
+export * from "./analytics-event.entity";

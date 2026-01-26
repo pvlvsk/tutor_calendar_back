@@ -1,7 +1,10 @@
 import { TeacherService } from "./teacher.service";
+import { CalendarImportService } from "./calendar-import.service";
+import { CalendarPreviewDto, CalendarImportDto, CalendarPreviewResponseDto, ImportResultResponseDto } from "./calendar-import.dto";
 export declare class TeacherController {
     private teacherService;
-    constructor(teacherService: TeacherService);
+    private calendarImportService;
+    constructor(teacherService: TeacherService, calendarImportService: CalendarImportService);
     getProfile(req: any): Promise<{
         id: string;
         displayName: string;
@@ -75,6 +78,20 @@ export declare class TeacherController {
         inviteUrl: string;
         expiresAt: string;
     }>;
+    getArchivedStudents(req: any): Promise<{
+        studentId: string;
+        studentUser: {
+            id: any;
+            firstName: any;
+            lastName: any;
+            username: any;
+        };
+        customFields: Record<string, string>;
+        archivedAt: string;
+        deleteAt: string;
+        daysLeft: number;
+        createdAt: string;
+    }[]>;
     getStudentDetails(req: any, studentId: string): Promise<{
         studentId: string;
         studentUser: {
@@ -135,7 +152,14 @@ export declare class TeacherController {
         };
         createdAt: string;
     }>;
-    deleteStudent(req: any, studentId: string): Promise<{
+    deleteStudent(req: any, studentId: string, body: {
+        deleteIndividualLessons?: boolean;
+    }): Promise<{
+        success: boolean;
+        action: string;
+        restoreUntil: string;
+    }>;
+    restoreStudent(req: any, studentId: string): Promise<{
         success: boolean;
     }>;
     createParentInvitation(req: any, studentId: string): Promise<{
@@ -165,7 +189,7 @@ export declare class TeacherController {
         id: string;
         seriesId: string;
         teacherId: string;
-        subjectId: string;
+        subjectId: string | null;
         startAt: string;
         durationMinutes: number;
         priceRub: number;
@@ -205,7 +229,7 @@ export declare class TeacherController {
         id: string;
         seriesId: string;
         teacherId: string;
-        subjectId: string;
+        subjectId: string | null;
         startAt: string;
         durationMinutes: number;
         priceRub: number;
@@ -265,7 +289,7 @@ export declare class TeacherController {
         id: string;
         seriesId: string;
         teacherId: string;
-        subjectId: string;
+        subjectId: string | null;
         startAt: string;
         durationMinutes: number;
         priceRub: number;
@@ -305,7 +329,7 @@ export declare class TeacherController {
         id: string;
         seriesId: string;
         teacherId: string;
-        subjectId: string;
+        subjectId: string | null;
         startAt: string;
         durationMinutes: number;
         priceRub: number;
@@ -362,7 +386,7 @@ export declare class TeacherController {
         id: string;
         seriesId: string;
         teacherId: string;
-        subjectId: string;
+        subjectId: string | null;
         startAt: string;
         durationMinutes: number;
         priceRub: number;
@@ -402,7 +426,7 @@ export declare class TeacherController {
         id: string;
         seriesId: string;
         teacherId: string;
-        subjectId: string;
+        subjectId: string | null;
         startAt: string;
         durationMinutes: number;
         priceRub: number;
@@ -456,7 +480,7 @@ export declare class TeacherController {
         id: string;
         seriesId: string;
         teacherId: string;
-        subjectId: string;
+        subjectId: string | null;
         startAt: string;
         durationMinutes: number;
         priceRub: number;
@@ -499,7 +523,7 @@ export declare class TeacherController {
         id: string;
         seriesId: string;
         teacherId: string;
-        subjectId: string;
+        subjectId: string | null;
         startAt: string;
         durationMinutes: number;
         priceRub: number;
@@ -537,7 +561,7 @@ export declare class TeacherController {
     }>;
     getLessonSeries(req: any): Promise<{
         id: string;
-        subjectId: string;
+        subjectId: string | null;
         recurrence: {
             frequency: string;
             dayOfWeek: number;
@@ -556,7 +580,7 @@ export declare class TeacherController {
         subject: {
             name: string;
             colorHex: string;
-        };
+        } | null;
         lessonsCount: number;
         lessonsDone: number;
         lessonsRemaining: number;
@@ -564,7 +588,7 @@ export declare class TeacherController {
     getStudentLessons(req: any, studentId: string, filters: any): Promise<{
         id: string;
         seriesId: string;
-        subjectId: string;
+        subjectId: string | null;
         startAt: string;
         durationMinutes: number;
         priceRub: number;
@@ -578,7 +602,7 @@ export declare class TeacherController {
         subject: {
             name: string;
             colorHex: string;
-        };
+        } | null;
     }[]>;
     getStudentDebt(req: any, studentId: string): Promise<import("../shared").DetailedDebt>;
     getStudentStats(req: any, studentId: string): Promise<import("../shared").StudentCardStats>;
@@ -627,5 +651,30 @@ export declare class TeacherController {
         isActive: boolean;
         createdAt: string;
     }>;
-    hasActiveSubscription(req: any, studentId: string): Promise<boolean>;
+    hasActiveSubscription(req: any, studentId: string): Promise<{
+        hasSubscription: boolean;
+        subscription?: {
+            id: string;
+            name: string | null;
+            type: "lessons" | "date";
+            remainingLessons: number | null;
+            expiresAt: string | null;
+            displayText: string;
+        };
+    }>;
+    getArchivedSubscriptions(req: any, studentId: string): Promise<{
+        id: string;
+        type: import("../database/entities").SubscriptionType;
+        totalLessons: number | null;
+        usedLessons: number;
+        remainingLessons: number | null;
+        expiresAt: string | null;
+        name: string;
+        isDeleted: boolean;
+        isExpired: boolean;
+        createdAt: string;
+        deletedAt: string | null;
+    }[]>;
+    getCalendarPreview(req: any, body: CalendarPreviewDto): Promise<CalendarPreviewResponseDto>;
+    importCalendar(req: any, body: CalendarImportDto): Promise<ImportResultResponseDto>;
 }

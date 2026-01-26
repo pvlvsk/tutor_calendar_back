@@ -6,7 +6,7 @@ export declare class Lesson {
     id: string;
     seriesId: string;
     teacherId: string;
-    subjectId: string;
+    subjectId: string | null;
     startAt: Date;
     durationMinutes: number;
     priceRub: number;
@@ -26,6 +26,6 @@ export declare class Lesson {
     updatedAt: Date;
     series: LessonSeries;
     teacher: TeacherProfile;
-    subject: Subject;
+    subject: Subject | null;
     lessonStudents: LessonStudent[];
 }

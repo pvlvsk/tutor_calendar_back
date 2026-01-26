@@ -15,10 +15,18 @@ import {
   ApiOperation,
   ApiBearerAuth,
   ApiQuery,
+  ApiBody,
 } from "@nestjs/swagger";
 import { TeacherService } from "./teacher.service";
+import { CalendarImportService } from "./calendar-import.service";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { RolesGuard, Roles } from "../auth/roles.guard";
+import {
+  CalendarPreviewDto,
+  CalendarImportDto,
+  CalendarPreviewResponseDto,
+  ImportResultResponseDto,
+} from "./calendar-import.dto";
 
 @ApiTags("teachers")
 @Controller("teachers")
@@ -26,7 +34,10 @@ import { RolesGuard, Roles } from "../auth/roles.guard";
 @Roles("teacher")
 @ApiBearerAuth()
 export class TeacherController {
-  constructor(private teacherService: TeacherService) {}
+  constructor(
+    private teacherService: TeacherService,
+    private calendarImportService: CalendarImportService
+  ) {}
 
   @Get("me")
   @ApiOperation({ summary: "Получить профиль учителя" })
@@ -112,6 +123,12 @@ export class TeacherController {
     return this.teacherService.createStudentInvitation(req.user.profileId);
   }
 
+  @Get("me/students/archived")
+  @ApiOperation({ summary: "Получить список архивированных учеников" })
+  getArchivedStudents(@Request() req: any) {
+    return this.teacherService.getArchivedStudents(req.user.profileId);
+  }
+
   @Get("me/students/:studentId")
   @ApiOperation({ summary: "Получить детали ученика" })
   getStudentDetails(
@@ -136,9 +153,26 @@ export class TeacherController {
   }
 
   @Delete("me/students/:studentId")
-  @ApiOperation({ summary: "Удалить связь с учеником" })
-  deleteStudent(@Request() req: any, @Param("studentId") studentId: string) {
-    return this.teacherService.deleteStudent(req.user.profileId, studentId);
+  @ApiOperation({ 
+    summary: "Архивировать ученика (soft delete на 7 дней)",
+    description: "Ученик перемещается в архив на 7 дней. Уроки обрабатываются сразу: ученик убирается из групповых, индивидуальные удаляются (опционально)."
+  })
+  deleteStudent(
+    @Request() req: any, 
+    @Param("studentId") studentId: string,
+    @Body() body: { deleteIndividualLessons?: boolean }
+  ) {
+    return this.teacherService.deleteStudent(
+      req.user.profileId, 
+      studentId,
+      body?.deleteIndividualLessons ?? false
+    );
+  }
+
+  @Post("me/students/:studentId/restore")
+  @ApiOperation({ summary: "Восстановить ученика из архива" })
+  restoreStudent(@Request() req: any, @Param("studentId") studentId: string) {
+    return this.teacherService.restoreStudent(req.user.profileId, studentId);
   }
 
   @Post("me/students/:studentId/parents/invitations")
@@ -486,6 +520,47 @@ export class TeacherController {
     return this.teacherService.getArchivedSubscriptions(
       req.user.profileId,
       studentId
+    );
+  }
+
+  // ============================================
+  // Calendar Import
+  // ============================================
+
+  @Post("me/calendar/preview")
+  @ApiOperation({
+    summary: "Получить превью событий из внешнего календаря",
+    description:
+      "Загружает ICS календарь по URL или из содержимого файла и возвращает список событий для предпросмотра",
+  })
+  @ApiBody({ type: CalendarPreviewDto })
+  async getCalendarPreview(
+    @Request() req: any,
+    @Body() body: CalendarPreviewDto
+  ): Promise<CalendarPreviewResponseDto> {
+    return this.calendarImportService.getImportPreview(
+      req.user.profileId,
+      { url: body.url, content: body.content },
+      body.fromDate ? new Date(body.fromDate) : undefined,
+      body.toDate ? new Date(body.toDate) : undefined
+    );
+  }
+
+  @Post("me/calendar/import")
+  @ApiOperation({
+    summary: "Импортировать события из внешнего календаря как уроки",
+    description:
+      "Создаёт уроки на основе выбранных событий из внешнего календаря (по URL или из файла)",
+  })
+  @ApiBody({ type: CalendarImportDto })
+  async importCalendar(
+    @Request() req: any,
+    @Body() body: CalendarImportDto
+  ): Promise<ImportResultResponseDto> {
+    return this.calendarImportService.importEvents(
+      req.user.profileId,
+      body.events,
+      { url: body.url, content: body.content }
     );
   }
 }

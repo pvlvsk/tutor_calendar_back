@@ -27,8 +27,8 @@ __decorate([
     __metadata("design:type", String)
 ], LessonSeries.prototype, "teacherId", void 0);
 __decorate([
-    (0, typeorm_1.Column)(),
-    __metadata("design:type", String)
+    (0, typeorm_1.Column)({ nullable: true }),
+    __metadata("design:type", Object)
 ], LessonSeries.prototype, "subjectId", void 0);
 __decorate([
     (0, typeorm_1.Column)(),
@@ -83,10 +83,10 @@ __decorate([
 ], LessonSeries.prototype, "teacher", void 0);
 __decorate([
     (0, typeorm_1.ManyToOne)(() => subject_entity_1.Subject, (subject) => subject.lessonSeries, {
-        onDelete: "CASCADE",
+        onDelete: "SET NULL",
     }),
     (0, typeorm_1.JoinColumn)({ name: "subjectId" }),
-    __metadata("design:type", subject_entity_1.Subject)
+    __metadata("design:type", Object)
 ], LessonSeries.prototype, "subject", void 0);
 __decorate([
     (0, typeorm_1.OneToMany)(() => lesson_entity_1.Lesson, (lesson) => lesson.series),

@@ -29,4 +29,7 @@ __exportStar(require("./lesson-student.entity"), exports);
 __exportStar(require("./lesson-series-student.entity"), exports);
 __exportStar(require("./student-notification-settings.entity"), exports);
 __exportStar(require("./subscription.entity"), exports);
+__exportStar(require("./admin-user.entity"), exports);
+__exportStar(require("./request-log.entity"), exports);
+__exportStar(require("./analytics-event.entity"), exports);
 //# sourceMappingURL=index.js.map

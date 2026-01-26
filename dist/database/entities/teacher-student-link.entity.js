@@ -33,6 +33,11 @@ __decorate([
     __metadata("design:type", Object)
 ], TeacherStudentLink.prototype, "customFields", void 0);
 __decorate([
+    (0, typeorm_1.Column)({ type: 'timestamptz', nullable: true, default: null }),
+    (0, typeorm_1.Index)({ where: '"archivedAt" IS NOT NULL' }),
+    __metadata("design:type", Object)
+], TeacherStudentLink.prototype, "archivedAt", void 0);
+__decorate([
     (0, typeorm_1.CreateDateColumn)(),
     __metadata("design:type", Date)
 ], TeacherStudentLink.prototype, "createdAt", void 0);

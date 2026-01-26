@@ -196,7 +196,7 @@ let TeacherService = class TeacherService {
     }
     async getStudents(teacherId) {
         const links = await this.linkRepo.find({
-            where: { teacherId },
+            where: { teacherId, archivedAt: (0, typeorm_2.IsNull)() },
             relations: ["student", "student.user"],
         });
         const allSubjects = await this.subjectRepo.find({ where: { teacherId } });
@@ -265,14 +265,98 @@ let TeacherService = class TeacherService {
         await this.linkRepo.save(link);
         return this.getStudentDetails(teacherId, studentId);
     }
-    async deleteStudent(teacherId, studentId) {
+    async deleteStudent(teacherId, studentId, deleteIndividualLessons = false) {
         const link = await this.linkRepo.findOne({
-            where: { teacherId, studentId },
+            where: { teacherId, studentId, archivedAt: (0, typeorm_2.IsNull)() },
         });
         if (!link)
             throw new common_1.NotFoundException("STUDENT_NOT_FOUND");
-        await this.linkRepo.delete({ teacherId, studentId });
+        await this.processStudentLessonsOnArchive(teacherId, studentId, deleteIndividualLessons);
+        await this.parentRelationRepo.delete({ teacherId, studentId });
+        link.archivedAt = new Date();
+        await this.linkRepo.save(link);
+        return {
+            success: true,
+            action: "archived",
+            restoreUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        };
+    }
+    async processStudentLessonsOnArchive(teacherId, studentId, deleteIndividualLessons) {
+        const lessonStudentRecords = await this.lessonStudentRepo.find({
+            where: { studentId },
+            relations: ["lesson"],
+        });
+        const teacherLessonRecords = lessonStudentRecords.filter((ls) => ls.lesson?.teacherId === teacherId);
+        for (const record of teacherLessonRecords) {
+            const lessonId = record.lessonId;
+            const studentsOnLesson = await this.lessonStudentRepo.count({
+                where: { lessonId },
+            });
+            if (studentsOnLesson === 1) {
+                if (deleteIndividualLessons) {
+                    await this.lessonStudentRepo.delete({ lessonId });
+                    await this.lessonRepo.delete({ id: lessonId });
+                }
+                else {
+                    await this.lessonStudentRepo.delete({ lessonId, studentId });
+                }
+            }
+            else {
+                await this.lessonStudentRepo.delete({ lessonId, studentId });
+            }
+        }
+        const seriesStudentRecords = await this.seriesStudentRepo.find({
+            where: { studentId },
+            relations: ["series"],
+        });
+        const teacherSeriesRecords = seriesStudentRecords.filter((ss) => ss.series?.teacherId === teacherId);
+        for (const record of teacherSeriesRecords) {
+            await this.seriesStudentRepo.delete({ seriesId: record.seriesId, studentId });
+        }
+    }
+    async getArchivedStudents(teacherId) {
+        const links = await this.linkRepo.find({
+            where: { teacherId, archivedAt: (0, typeorm_2.Not)((0, typeorm_2.IsNull)()) },
+            relations: ["student", "student.user"],
+            order: { archivedAt: "DESC" },
+        });
+        return links.map((link) => {
+            const archivedAt = link.archivedAt;
+            const deleteAt = new Date(archivedAt.getTime() + 7 * 24 * 60 * 60 * 1000);
+            const daysLeft = Math.max(0, Math.ceil((deleteAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+            return {
+                studentId: link.studentId,
+                studentUser: this.formatUserInfo(link.student.user),
+                customFields: link.customFields,
+                archivedAt: archivedAt.toISOString(),
+                deleteAt: deleteAt.toISOString(),
+                daysLeft,
+                createdAt: link.createdAt.toISOString(),
+            };
+        });
+    }
+    async restoreStudent(teacherId, studentId) {
+        const link = await this.linkRepo.findOne({
+            where: { teacherId, studentId, archivedAt: (0, typeorm_2.Not)((0, typeorm_2.IsNull)()) },
+        });
+        if (!link)
+            throw new common_1.NotFoundException("ARCHIVED_STUDENT_NOT_FOUND");
+        const archivedAt = link.archivedAt;
+        const deleteAt = new Date(archivedAt.getTime() + 7 * 24 * 60 * 60 * 1000);
+        if (Date.now() > deleteAt.getTime()) {
+            throw new common_1.ConflictException("ARCHIVE_EXPIRED");
+        }
+        link.archivedAt = null;
+        await this.linkRepo.save(link);
         return { success: true };
+    }
+    async cleanupExpiredArchives() {
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        const result = await this.linkRepo.delete({
+            archivedAt: (0, typeorm_2.LessThanOrEqual)(sevenDaysAgo),
+        });
+        console.log(`[TeacherService] Cleaned up ${result.affected} expired archived students`);
+        return { deleted: result.affected || 0 };
     }
     async createStudentInvitation(teacherId) {
         const token = "INV_" + (0, crypto_1.randomBytes)(16).toString("hex");
@@ -400,19 +484,23 @@ let TeacherService = class TeacherService {
             if (!link)
                 throw new common_1.ForbiddenException("STUDENT_NOT_LINKED");
         }
-        const subject = await this.subjectRepo.findOne({
-            where: { id: data.subjectId, teacherId },
-        });
-        if (!subject)
-            throw new common_1.NotFoundException("SUBJECT_NOT_FOUND");
+        let subjectName = null;
+        if (data.subjectId) {
+            const subject = await this.subjectRepo.findOne({
+                where: { id: data.subjectId, teacherId },
+            });
+            if (!subject)
+                throw new common_1.NotFoundException("SUBJECT_NOT_FOUND");
+            subjectName = subject.name;
+        }
         if (data.recurrence && data.recurrence.frequency !== "none") {
-            return this.createRecurringLessons(teacherId, data);
+            return this.createRecurringLessons(teacherId, data, subjectName);
         }
         const isFree = data.isFree || false;
         const priceRub = data.priceRub || 0;
         const lesson = this.lessonRepo.create({
             teacherId,
-            subjectId: data.subjectId,
+            subjectId: data.subjectId || null,
             startAt: new Date(data.startAt),
             durationMinutes: data.durationMinutes,
             priceRub,
@@ -432,10 +520,10 @@ let TeacherService = class TeacherService {
             });
             await this.lessonStudentRepo.save(lessonStudent);
         }
-        await this.notifyStudentsAboutNewLesson(teacherId, studentIds, subject.name, new Date(data.startAt), data.meetingUrl);
+        await this.notifyStudentsAboutNewLesson(teacherId, studentIds, subjectName || "Занятие", new Date(data.startAt), data.meetingUrl);
         return this.getLessonWithDetails(saved.id);
     }
-    async createRecurringLessons(teacherId, data) {
+    async createRecurringLessons(teacherId, data, subjectName) {
         const startDate = new Date(data.startAt);
         const timeOfDay = startDate.toTimeString().slice(0, 5);
         const dayOfWeek = startDate.getDay();
@@ -444,7 +532,7 @@ let TeacherService = class TeacherService {
         const priceRub = data.priceRub || 0;
         const series = new entities_1.LessonSeries();
         series.teacherId = teacherId;
-        series.subjectId = data.subjectId;
+        series.subjectId = data.subjectId || null;
         series.frequency = data.recurrence.frequency;
         series.dayOfWeek = dayOfWeek;
         series.timeOfDay = timeOfDay;
@@ -478,7 +566,7 @@ let TeacherService = class TeacherService {
             const lesson = this.lessonRepo.create({
                 seriesId: series.id,
                 teacherId,
-                subjectId: data.subjectId,
+                subjectId: data.subjectId || null,
                 startAt: new Date(currentDate),
                 durationMinutes: data.durationMinutes,
                 priceRub,
@@ -721,12 +809,14 @@ let TeacherService = class TeacherService {
                 const newStudentIds = data.studentIds.filter((id) => !existingStudentIds.includes(id));
                 if (newStudentIds.length > 0) {
                     console.log(`[updateLesson] New students added to series: ${newStudentIds}`);
-                    const subject = await this.subjectRepo.findOne({
-                        where: { id: lesson.subjectId },
-                    });
-                    if (subject) {
-                        await this.notifyStudentsAboutNewLesson(teacherId, newStudentIds, subject.name, lesson.startAt, data.meetingUrl ?? lesson.meetingUrl);
+                    let subjectName;
+                    if (lesson.subjectId) {
+                        const subject = await this.subjectRepo.findOne({
+                            where: { id: lesson.subjectId },
+                        });
+                        subjectName = subject?.name;
                     }
+                    await this.notifyStudentsAboutNewLesson(teacherId, newStudentIds, subjectName, lesson.startAt, data.meetingUrl ?? lesson.meetingUrl);
                 }
                 console.log(`[updateLesson] Students updated successfully`);
             }
@@ -752,12 +842,14 @@ let TeacherService = class TeacherService {
                 const newStudentIds = data.studentIds.filter((id) => !existingStudentIds.includes(id));
                 if (newStudentIds.length > 0) {
                     console.log(`[updateLesson] New students added: ${newStudentIds}`);
-                    const subject = await this.subjectRepo.findOne({
-                        where: { id: lesson.subjectId },
-                    });
-                    if (subject) {
-                        await this.notifyStudentsAboutNewLesson(teacherId, newStudentIds, subject.name, lesson.startAt, data.meetingUrl ?? lesson.meetingUrl);
+                    let subjectName;
+                    if (lesson.subjectId) {
+                        const subject = await this.subjectRepo.findOne({
+                            where: { id: lesson.subjectId },
+                        });
+                        subjectName = subject?.name;
                     }
+                    await this.notifyStudentsAboutNewLesson(teacherId, newStudentIds, subjectName, lesson.startAt, data.meetingUrl ?? lesson.meetingUrl);
                 }
                 console.log(`[updateLesson] Students updated for single lesson`);
             }
@@ -823,10 +915,12 @@ let TeacherService = class TeacherService {
                     lastName: ss.student?.user?.lastName,
                     priceRub: ss.priceRub,
                 })),
-                subject: {
-                    name: s.subject.name,
-                    colorHex: s.subject.colorHex,
-                },
+                subject: s.subject
+                    ? {
+                        name: s.subject.name,
+                        colorHex: s.subject.colorHex,
+                    }
+                    : null,
                 lessonsCount,
                 lessonsDone,
                 lessonsRemaining: lessonsCount - lessonsDone,
@@ -868,10 +962,12 @@ let TeacherService = class TeacherService {
             teacherNoteUpdatedAt: l.teacherNoteUpdatedAt?.toISOString() || null,
             lessonReport: l.lessonReport,
             studentNoteForTeacher: l.studentNoteForTeacher,
-            subject: {
-                name: l.subject.name,
-                colorHex: l.subject.colorHex,
-            },
+            subject: l.subject
+                ? {
+                    name: l.subject.name,
+                    colorHex: l.subject.colorHex,
+                }
+                : null,
         }));
     }
     async getStudentDebtDetails(teacherId, studentId) {
@@ -920,12 +1016,14 @@ let TeacherService = class TeacherService {
             priceRub: lesson.isFree ? 0 : priceRub ?? lesson.priceRub,
         });
         await this.lessonStudentRepo.save(lessonStudent);
-        const subject = await this.subjectRepo.findOne({
-            where: { id: lesson.subjectId },
-        });
-        if (subject) {
-            await this.notifyStudentsAboutNewLesson(teacherId, [studentId], subject.name, lesson.startAt, lesson.meetingUrl);
+        let subjectName;
+        if (lesson.subjectId) {
+            const subject = await this.subjectRepo.findOne({
+                where: { id: lesson.subjectId },
+            });
+            subjectName = subject?.name;
         }
+        await this.notifyStudentsAboutNewLesson(teacherId, [studentId], subjectName, lesson.startAt, lesson.meetingUrl);
         return this.getLessonWithDetails(lessonId);
     }
     async removeStudentFromLesson(teacherId, lessonId, studentId) {
@@ -1155,7 +1253,7 @@ let TeacherService = class TeacherService {
             if (!student?.user)
                 continue;
             await this.botService.notifyLessonCreated(student.user.id, {
-                subject: subjectName,
+                subject: subjectName || "Занятие",
                 date: dateStr,
                 time: timeStr,
                 teacherName,
@@ -1258,16 +1356,76 @@ let TeacherService = class TeacherService {
         const subscription = await this.subscriptionRepo.findOne({
             where: { teacherId, studentId, deletedAt: (0, typeorm_2.IsNull)() },
         });
-        if (!subscription)
-            return false;
+        if (!subscription) {
+            return { hasSubscription: false };
+        }
+        let isActive = false;
+        let displayText = "";
+        let remainingLessons = null;
         if (subscription.type === "lessons") {
-            return subscription.totalLessons === null ||
-                subscription.usedLessons < subscription.totalLessons;
+            remainingLessons = subscription.totalLessons === null
+                ? null
+                : Math.max(0, subscription.totalLessons - subscription.usedLessons);
+            isActive = remainingLessons === null || remainingLessons > 0;
+            displayText = remainingLessons !== null
+                ? `Осталось ${remainingLessons} урок${this.getLessonEnding(remainingLessons)}`
+                : "Безлимитный";
         }
-        if (subscription.type === "date") {
-            return !subscription.expiresAt || new Date() <= subscription.expiresAt;
+        else if (subscription.type === "date") {
+            isActive = !subscription.expiresAt || new Date() <= subscription.expiresAt;
+            if (subscription.expiresAt) {
+                const daysLeft = Math.ceil((subscription.expiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                displayText = isActive ? `Осталось ${daysLeft} дн.` : "Истёк";
+            }
+            else {
+                displayText = "Бессрочный";
+            }
         }
-        return false;
+        if (!isActive) {
+            return { hasSubscription: false };
+        }
+        return {
+            hasSubscription: true,
+            subscription: {
+                id: subscription.id,
+                name: subscription.name,
+                type: subscription.type,
+                remainingLessons,
+                expiresAt: subscription.expiresAt?.toISOString() || null,
+                displayText,
+            },
+        };
+    }
+    getLessonEnding(count) {
+        const lastTwo = count % 100;
+        if (lastTwo >= 11 && lastTwo <= 19)
+            return "ов";
+        const lastOne = count % 10;
+        if (lastOne === 1)
+            return "";
+        if (lastOne >= 2 && lastOne <= 4)
+            return "а";
+        return "ов";
+    }
+    async getArchivedSubscriptions(teacherId, studentId) {
+        const subscriptions = await this.subscriptionRepo.find({
+            where: { teacherId, studentId },
+            withDeleted: true,
+            order: { deletedAt: "DESC", createdAt: "DESC" },
+        });
+        return subscriptions
+            .filter(sub => {
+            if (sub.deletedAt)
+                return true;
+            if (sub.type === "lessons" && sub.totalLessons !== null) {
+                return sub.usedLessons >= sub.totalLessons;
+            }
+            if (sub.type === "date" && sub.expiresAt) {
+                return new Date() > sub.expiresAt;
+            }
+            return false;
+        })
+            .map(sub => this.formatSubscriptionArchived(sub));
     }
     formatSubscription(subscription) {
         const remainingLessons = subscription.type === "lessons" && subscription.totalLessons !== null
@@ -1287,6 +1445,28 @@ let TeacherService = class TeacherService {
             isExpired,
             isActive: !subscription.deletedAt && !isExpired,
             createdAt: subscription.createdAt.toISOString(),
+        };
+    }
+    formatSubscriptionArchived(subscription) {
+        const remainingLessons = subscription.type === "lessons" && subscription.totalLessons !== null
+            ? Math.max(0, subscription.totalLessons - subscription.usedLessons)
+            : null;
+        const isDeleted = !!subscription.deletedAt;
+        const isExpired = subscription.type === "lessons"
+            ? remainingLessons === 0
+            : subscription.expiresAt ? new Date() > subscription.expiresAt : false;
+        return {
+            id: subscription.id,
+            type: subscription.type,
+            totalLessons: subscription.totalLessons,
+            usedLessons: subscription.usedLessons,
+            remainingLessons,
+            expiresAt: subscription.expiresAt?.toISOString() || null,
+            name: subscription.name,
+            isDeleted,
+            isExpired,
+            createdAt: subscription.createdAt.toISOString(),
+            deletedAt: subscription.deletedAt?.toISOString() || null,
         };
     }
 };

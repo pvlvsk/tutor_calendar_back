@@ -5,6 +5,7 @@ export declare class TeacherStudentLink {
     teacherId: string;
     studentId: string;
     customFields: Record<string, string>;
+    archivedAt: Date | null;
     createdAt: Date;
     updatedAt: Date;
     teacher: TeacherProfile;

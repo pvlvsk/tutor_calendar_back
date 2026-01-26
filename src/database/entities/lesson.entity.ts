@@ -24,8 +24,8 @@ export class Lesson {
   @Column()
   teacherId: string;
 
-  @Column()
-  subjectId: string;
+  @Column({ nullable: true })
+  subjectId: string | null;
 
   @Column()
   startAt: Date;
@@ -91,10 +91,10 @@ export class Lesson {
   teacher: TeacherProfile;
 
   @ManyToOne(() => Subject, (subject) => subject.lessons, {
-    onDelete: "CASCADE",
+    onDelete: "SET NULL",
   })
   @JoinColumn({ name: "subjectId" })
-  subject: Subject;
+  subject: Subject | null;
 
   @OneToMany(() => LessonStudent, (ls) => ls.lesson)
   lessonStudents: LessonStudent[];

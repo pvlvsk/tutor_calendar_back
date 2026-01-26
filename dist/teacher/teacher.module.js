@@ -11,6 +11,8 @@ const common_1 = require("@nestjs/common");
 const typeorm_1 = require("@nestjs/typeorm");
 const teacher_controller_1 = require("./teacher.controller");
 const teacher_service_1 = require("./teacher.service");
+const teacher_tasks_1 = require("./teacher.tasks");
+const calendar_import_service_1 = require("./calendar-import.service");
 const bot_module_1 = require("../bot/bot.module");
 const entities_1 = require("../database/entities");
 let TeacherModule = class TeacherModule {
@@ -35,7 +37,7 @@ exports.TeacherModule = TeacherModule = __decorate([
             bot_module_1.BotModule,
         ],
         controllers: [teacher_controller_1.TeacherController],
-        providers: [teacher_service_1.TeacherService],
+        providers: [teacher_service_1.TeacherService, teacher_tasks_1.TeacherTasks, calendar_import_service_1.CalendarImportService],
     })
 ], TeacherModule);
 //# sourceMappingURL=teacher.module.js.map

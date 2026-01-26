@@ -17,11 +17,13 @@ const parent_module_1 = require("./parent/parent.module");
 const shared_module_1 = require("./shared/shared.module");
 const health_module_1 = require("./health/health.module");
 const bot_module_1 = require("./bot/bot.module");
+const admin_1 = require("./admin");
 const logging_middleware_1 = require("./shared/logging.middleware");
 const entities = require("./database/entities");
 let AppModule = class AppModule {
     configure(consumer) {
         consumer.apply(logging_middleware_1.LoggingMiddleware).forRoutes("*");
+        consumer.apply(admin_1.RequestLoggerMiddleware).forRoutes("*");
     }
 };
 exports.AppModule = AppModule;
@@ -44,6 +46,7 @@ exports.AppModule = AppModule = __decorate([
             parent_module_1.ParentModule,
             health_module_1.HealthModule,
             bot_module_1.BotModule,
+            admin_1.AdminModule,
         ],
     })
 ], AppModule);

@@ -5,7 +5,7 @@ import { LessonSeriesStudent } from "./lesson-series-student.entity";
 export declare class LessonSeries {
     id: string;
     teacherId: string;
-    subjectId: string;
+    subjectId: string | null;
     frequency: string;
     dayOfWeek: number;
     endDate: Date;
@@ -18,7 +18,7 @@ export declare class LessonSeries {
     createdAt: Date;
     updatedAt: Date;
     teacher: TeacherProfile;
-    subject: Subject;
+    subject: Subject | null;
     lessons: Lesson[];
     seriesStudents: LessonSeriesStudent[];
 }

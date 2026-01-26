@@ -1,4 +1,4 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, Unique } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, Unique, Index } from 'typeorm';
 import { TeacherProfile } from './teacher-profile.entity';
 import { StudentProfile } from './student-profile.entity';
 
@@ -16,6 +16,14 @@ export class TeacherStudentLink {
 
   @Column({ type: 'jsonb', nullable: true })
   customFields: Record<string, string>;
+
+  /**
+   * Дата архивации. NULL = активный ученик.
+   * Через 7 дней после архивации запись удаляется автоматически.
+   */
+  @Column({ type: 'timestamptz', nullable: true, default: null })
+  @Index({ where: '"archivedAt" IS NOT NULL' })
+  archivedAt: Date | null;
 
   @CreateDateColumn()
   createdAt: Date;

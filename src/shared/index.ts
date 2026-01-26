@@ -1,5 +1,6 @@
 export * from './types';
 export * from './utils';
+export * from './lesson-formatters';
 export * from './stats.service';
 export * from './debt.service';
 export * from './achievements.service';

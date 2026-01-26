@@ -21,8 +21,8 @@ export class LessonSeries {
   @Column()
   teacherId: string;
 
-  @Column()
-  subjectId: string;
+  @Column({ nullable: true })
+  subjectId: string | null;
 
   @Column()
   frequency: string;
@@ -64,10 +64,10 @@ export class LessonSeries {
   teacher: TeacherProfile;
 
   @ManyToOne(() => Subject, (subject) => subject.lessonSeries, {
-    onDelete: "CASCADE",
+    onDelete: "SET NULL",
   })
   @JoinColumn({ name: "subjectId" })
-  subject: Subject;
+  subject: Subject | null;
 
   @OneToMany(() => Lesson, (lesson) => lesson.series)
   lessons: Lesson[];

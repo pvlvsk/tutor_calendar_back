@@ -2,6 +2,8 @@ import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { TeacherController } from "./teacher.controller";
 import { TeacherService } from "./teacher.service";
+import { TeacherTasks } from "./teacher.tasks";
+import { CalendarImportService } from "./calendar-import.service";
 import { BotModule } from "../bot/bot.module";
 import {
   TeacherProfile,
@@ -35,6 +37,6 @@ import {
     BotModule,
   ],
   controllers: [TeacherController],
-  providers: [TeacherService],
+  providers: [TeacherService, TeacherTasks, CalendarImportService],
 })
 export class TeacherModule {}

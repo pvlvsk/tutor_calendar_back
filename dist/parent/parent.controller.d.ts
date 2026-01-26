@@ -98,7 +98,7 @@ export declare class ParentController {
     getChildLessons(req: any, childId: string, from: string, to: string, subjectId?: string, teacherId?: string, status?: string): Promise<{
         id: string;
         teacherId: string;
-        subjectId: string;
+        subjectId: string | null;
         startAt: string;
         durationMinutes: number;
         priceRub: number;
@@ -115,14 +115,14 @@ export declare class ParentController {
             lastName: string;
         };
         subject: {
-            name: string;
-            colorHex: string;
+            name: string | undefined;
+            colorHex: string | undefined;
         };
     }[]>;
     getChildLessonDetails(req: any, childId: string, lessonId: string): Promise<{
         id: string;
         teacherId: string;
-        subjectId: string;
+        subjectId: string | null;
         startAt: string;
         durationMinutes: number;
         priceRub: number;
@@ -141,8 +141,8 @@ export declare class ParentController {
             username: string;
         };
         subject: {
-            name: string;
-            colorHex: string;
+            name: string | undefined;
+            colorHex: string | undefined;
         };
         createdAt: string;
         updatedAt: string;

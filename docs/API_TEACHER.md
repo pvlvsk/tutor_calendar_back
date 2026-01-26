@@ -230,3 +230,115 @@ Query: applyTo? (this | future | all) — для серий
 ### GET /api/teachers/me/students/:studentId/debt
 
 Получить детальный долг ученика.
+
+## Архив учеников
+
+### GET /api/teachers/me/students/archived
+
+Получить архивированных учеников.
+
+Response:
+```json
+[
+  {
+    "id": "link-uuid",
+    "studentId": "student-uuid",
+    "firstName": "Иван",
+    "lastName": "Петров",
+    "archivedAt": "2025-01-20T10:00:00Z",
+    "daysUntilDeletion": 5
+  }
+]
+```
+
+### DELETE /api/teachers/me/students/:studentId
+
+Архивировать ученика (мягкое удаление на 7 дней).
+
+```json
+{
+  "deleteIndividualLessons": true // Удалить уроки где ученик единственный
+}
+```
+
+### POST /api/teachers/me/students/:studentId/restore
+
+Восстановить ученика из архива.
+
+## Импорт календаря
+
+### POST /api/teachers/me/calendar/preview
+
+Получить превью событий из внешнего календаря.
+
+Request:
+```json
+{
+  "url": "https://calendar.google.com/...", // или
+  "content": "BEGIN:VCALENDAR..." // содержимое ICS файла
+}
+```
+
+Response:
+```json
+{
+  "events": [
+    {
+      "uid": "event-uid",
+      "title": "Тренировка",
+      "startAt": "2026-02-03T10:00:00Z",
+      "endAt": "2026-02-03T11:30:00Z",
+      "durationMinutes": 90,
+      "isRecurring": true,
+      "suggestedSubjectId": "uuid" // если название совпадает с предметом
+    }
+  ],
+  "subjects": [{ "id": "uuid", "name": "Математика" }],
+  "totalEvents": 200,
+  "hasRecurringEvents": true
+}
+```
+
+**Повторяющиеся события (RRULE):**
+- Автоматически разворачиваются в отдельные события на год вперёд
+- Поле `isRecurring: true` указывает на принадлежность к серии
+
+### POST /api/teachers/me/calendar/import
+
+Импортировать выбранные события как уроки.
+
+Request:
+```json
+{
+  "url": "https://...", // или "content": "..."
+  "events": [
+    {
+      "uid": "event-uid",
+      "subjectId": "uuid", // опционально
+      "autoCreateSubject": true, // создать предмет из названия события
+      "studentIds": ["uuid"], // опционально
+      "priceRub": 2000 // опционально
+    }
+  ]
+}
+```
+
+Response:
+```json
+{
+  "imported": 50,
+  "skipped": 2,
+  "errors": ["Предмет не найден для 'Событие'"],
+  "seriesCreated": 3
+}
+```
+
+**Повторяющиеся события (RRULE):**
+- События с одинаковым `originalUid` группируются в серию (`LessonSeries`)
+- Каждая серия создаётся автоматически при импорте
+- Уроки внутри серии связаны через `seriesId`
+
+**Автосоздание предметов:**
+- Если `autoCreateSubject: true` и `subjectId` не указан
+- Создаётся предмет с названием события
+- Если предмет с таким названием уже есть — используется существующий

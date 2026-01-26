@@ -145,8 +145,31 @@ export declare class TeacherService {
         };
         createdAt: string;
     }>;
-    deleteStudent(teacherId: string, studentId: string): Promise<{
+    deleteStudent(teacherId: string, studentId: string, deleteIndividualLessons?: boolean): Promise<{
         success: boolean;
+        action: string;
+        restoreUntil: string;
+    }>;
+    private processStudentLessonsOnArchive;
+    getArchivedStudents(teacherId: string): Promise<{
+        studentId: string;
+        studentUser: {
+            id: any;
+            firstName: any;
+            lastName: any;
+            username: any;
+        };
+        customFields: Record<string, string>;
+        archivedAt: string;
+        deleteAt: string;
+        daysLeft: number;
+        createdAt: string;
+    }[]>;
+    restoreStudent(teacherId: string, studentId: string): Promise<{
+        success: boolean;
+    }>;
+    cleanupExpiredArchives(): Promise<{
+        deleted: number;
     }>;
     createStudentInvitation(teacherId: string): Promise<{
         invitationId: string;
@@ -179,7 +202,7 @@ export declare class TeacherService {
         id: string;
         seriesId: string;
         teacherId: string;
-        subjectId: string;
+        subjectId: string | null;
         startAt: string;
         durationMinutes: number;
         priceRub: number;
@@ -226,7 +249,7 @@ export declare class TeacherService {
         id: string;
         seriesId: string;
         teacherId: string;
-        subjectId: string;
+        subjectId: string | null;
         startAt: string;
         durationMinutes: number;
         priceRub: number;
@@ -266,7 +289,7 @@ export declare class TeacherService {
         id: string;
         seriesId: string;
         teacherId: string;
-        subjectId: string;
+        subjectId: string | null;
         startAt: string;
         durationMinutes: number;
         priceRub: number;
@@ -321,7 +344,7 @@ export declare class TeacherService {
         id: string;
         seriesId: string;
         teacherId: string;
-        subjectId: string;
+        subjectId: string | null;
         startAt: string;
         durationMinutes: number;
         priceRub: number;
@@ -373,7 +396,7 @@ export declare class TeacherService {
     }>;
     getLessonSeries(teacherId: string): Promise<{
         id: string;
-        subjectId: string;
+        subjectId: string | null;
         recurrence: {
             frequency: string;
             dayOfWeek: number;
@@ -392,7 +415,7 @@ export declare class TeacherService {
         subject: {
             name: string;
             colorHex: string;
-        };
+        } | null;
         lessonsCount: number;
         lessonsDone: number;
         lessonsRemaining: number;
@@ -400,7 +423,7 @@ export declare class TeacherService {
     getStudentLessons(teacherId: string, studentId: string, filters?: any): Promise<{
         id: string;
         seriesId: string;
-        subjectId: string;
+        subjectId: string | null;
         startAt: string;
         durationMinutes: number;
         priceRub: number;
@@ -414,7 +437,7 @@ export declare class TeacherService {
         subject: {
             name: string;
             colorHex: string;
-        };
+        } | null;
     }[]>;
     getStudentDebtDetails(teacherId: string, studentId: string): Promise<import("../shared").DetailedDebt>;
     getStudentCardStats(teacherId: string, studentId: string): Promise<import("../shared").StudentCardStats>;
@@ -423,7 +446,7 @@ export declare class TeacherService {
         id: string;
         seriesId: string;
         teacherId: string;
-        subjectId: string;
+        subjectId: string | null;
         startAt: string;
         durationMinutes: number;
         priceRub: number;
@@ -463,7 +486,7 @@ export declare class TeacherService {
         id: string;
         seriesId: string;
         teacherId: string;
-        subjectId: string;
+        subjectId: string | null;
         startAt: string;
         durationMinutes: number;
         priceRub: number;
@@ -515,7 +538,7 @@ export declare class TeacherService {
         id: string;
         seriesId: string;
         teacherId: string;
-        subjectId: string;
+        subjectId: string | null;
         startAt: string;
         durationMinutes: number;
         priceRub: number;
@@ -555,7 +578,7 @@ export declare class TeacherService {
         id: string;
         seriesId: string;
         teacherId: string;
-        subjectId: string;
+        subjectId: string | null;
         startAt: string;
         durationMinutes: number;
         priceRub: number;
@@ -641,6 +664,31 @@ export declare class TeacherService {
         createdAt: string;
     }>;
     useSubscriptionLesson(teacherId: string, studentId: string): Promise<boolean>;
-    hasActiveSubscription(teacherId: string, studentId: string): Promise<boolean>;
+    hasActiveSubscription(teacherId: string, studentId: string): Promise<{
+        hasSubscription: boolean;
+        subscription?: {
+            id: string;
+            name: string | null;
+            type: "lessons" | "date";
+            remainingLessons: number | null;
+            expiresAt: string | null;
+            displayText: string;
+        };
+    }>;
+    private getLessonEnding;
+    getArchivedSubscriptions(teacherId: string, studentId: string): Promise<{
+        id: string;
+        type: SubscriptionType;
+        totalLessons: number | null;
+        usedLessons: number;
+        remainingLessons: number | null;
+        expiresAt: string | null;
+        name: string;
+        isDeleted: boolean;
+        isExpired: boolean;
+        createdAt: string;
+        deletedAt: string | null;
+    }[]>;
     private formatSubscription;
+    private formatSubscriptionArchived;
 }

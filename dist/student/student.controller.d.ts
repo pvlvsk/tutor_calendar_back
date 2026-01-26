@@ -72,7 +72,7 @@ export declare class StudentController {
         id: string;
         seriesId: string;
         teacherId: string;
-        subjectId: string;
+        subjectId: string | null;
         startAt: string;
         durationMinutes: number;
         status: string;
@@ -92,14 +92,14 @@ export declare class StudentController {
             lastName: string;
         };
         subject: {
-            name: string;
-            colorHex: string;
+            name: string | undefined;
+            colorHex: string | undefined;
         };
     }[]>;
     getLessonDetails(req: any, lessonId: string): Promise<{
         id: string;
         teacherId: string;
-        subjectId: string;
+        subjectId: string | null;
         startAt: string;
         durationMinutes: number;
         status: string;
@@ -122,8 +122,8 @@ export declare class StudentController {
             username: string;
         };
         subject: {
-            name: string;
-            colorHex: string;
+            name: string | undefined;
+            colorHex: string | undefined;
         };
         createdAt: string;
         updatedAt: string;
@@ -131,7 +131,7 @@ export declare class StudentController {
     updateLessonNotes(req: any, lessonId: string, body: any): Promise<{
         id: string;
         teacherId: string;
-        subjectId: string;
+        subjectId: string | null;
         startAt: string;
         durationMinutes: number;
         status: string;
@@ -154,8 +154,8 @@ export declare class StudentController {
             username: string;
         };
         subject: {
-            name: string;
-            colorHex: string;
+            name: string | undefined;
+            colorHex: string | undefined;
         };
         createdAt: string;
         updatedAt: string;
@@ -163,7 +163,7 @@ export declare class StudentController {
     cancelLesson(req: any, lessonId: string): Promise<{
         id: string;
         teacherId: string;
-        subjectId: string;
+        subjectId: string | null;
         startAt: string;
         durationMinutes: number;
         status: string;
@@ -186,8 +186,8 @@ export declare class StudentController {
             username: string;
         };
         subject: {
-            name: string;
-            colorHex: string;
+            name: string | undefined;
+            colorHex: string | undefined;
         };
         createdAt: string;
         updatedAt: string;

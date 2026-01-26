@@ -16,11 +16,14 @@ exports.TeacherController = void 0;
 const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
 const teacher_service_1 = require("./teacher.service");
+const calendar_import_service_1 = require("./calendar-import.service");
 const jwt_auth_guard_1 = require("../auth/jwt-auth.guard");
 const roles_guard_1 = require("../auth/roles.guard");
+const calendar_import_dto_1 = require("./calendar-import.dto");
 let TeacherController = class TeacherController {
-    constructor(teacherService) {
+    constructor(teacherService, calendarImportService) {
         this.teacherService = teacherService;
+        this.calendarImportService = calendarImportService;
     }
     getProfile(req) {
         return this.teacherService.getProfile(req.user.profileId);
@@ -55,14 +58,20 @@ let TeacherController = class TeacherController {
     createStudentInvitation(req) {
         return this.teacherService.createStudentInvitation(req.user.profileId);
     }
+    getArchivedStudents(req) {
+        return this.teacherService.getArchivedStudents(req.user.profileId);
+    }
     getStudentDetails(req, studentId) {
         return this.teacherService.getStudentDetails(req.user.profileId, studentId);
     }
     updateStudent(req, studentId, body) {
         return this.teacherService.updateStudentCustomFields(req.user.profileId, studentId, body.customFields);
     }
-    deleteStudent(req, studentId) {
-        return this.teacherService.deleteStudent(req.user.profileId, studentId);
+    deleteStudent(req, studentId, body) {
+        return this.teacherService.deleteStudent(req.user.profileId, studentId, body?.deleteIndividualLessons ?? false);
+    }
+    restoreStudent(req, studentId) {
+        return this.teacherService.restoreStudent(req.user.profileId, studentId);
     }
     createParentInvitation(req, studentId) {
         return this.teacherService.createParentInvitation(req.user.profileId, studentId);
@@ -136,6 +145,15 @@ let TeacherController = class TeacherController {
     }
     hasActiveSubscription(req, studentId) {
         return this.teacherService.hasActiveSubscription(req.user.profileId, studentId);
+    }
+    getArchivedSubscriptions(req, studentId) {
+        return this.teacherService.getArchivedSubscriptions(req.user.profileId, studentId);
+    }
+    async getCalendarPreview(req, body) {
+        return this.calendarImportService.getImportPreview(req.user.profileId, { url: body.url, content: body.content }, body.fromDate ? new Date(body.fromDate) : undefined, body.toDate ? new Date(body.toDate) : undefined);
+    }
+    async importCalendar(req, body) {
+        return this.calendarImportService.importEvents(req.user.profileId, body.events, { url: body.url, content: body.content });
     }
 };
 exports.TeacherController = TeacherController;
@@ -238,6 +256,14 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], TeacherController.prototype, "createStudentInvitation", null);
 __decorate([
+    (0, common_1.Get)("me/students/archived"),
+    (0, swagger_1.ApiOperation)({ summary: "Получить список архивированных учеников" }),
+    __param(0, (0, common_1.Request)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], TeacherController.prototype, "getArchivedStudents", null);
+__decorate([
     (0, common_1.Get)("me/students/:studentId"),
     (0, swagger_1.ApiOperation)({ summary: "Получить детали ученика" }),
     __param(0, (0, common_1.Request)()),
@@ -258,13 +284,26 @@ __decorate([
 ], TeacherController.prototype, "updateStudent", null);
 __decorate([
     (0, common_1.Delete)("me/students/:studentId"),
-    (0, swagger_1.ApiOperation)({ summary: "Удалить связь с учеником" }),
+    (0, swagger_1.ApiOperation)({
+        summary: "Архивировать ученика (soft delete на 7 дней)",
+        description: "Ученик перемещается в архив на 7 дней. Уроки обрабатываются сразу: ученик убирается из групповых, индивидуальные удаляются (опционально)."
+    }),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Param)("studentId")),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, Object]),
+    __metadata("design:returntype", void 0)
+], TeacherController.prototype, "deleteStudent", null);
+__decorate([
+    (0, common_1.Post)("me/students/:studentId/restore"),
+    (0, swagger_1.ApiOperation)({ summary: "Восстановить ученика из архива" }),
     __param(0, (0, common_1.Request)()),
     __param(1, (0, common_1.Param)("studentId")),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", void 0)
-], TeacherController.prototype, "deleteStudent", null);
+], TeacherController.prototype, "restoreStudent", null);
 __decorate([
     (0, common_1.Post)("me/students/:studentId/parents/invitations"),
     (0, swagger_1.ApiOperation)({ summary: "Создать приглашение для родителя ученика" }),
@@ -519,12 +558,48 @@ __decorate([
     __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", void 0)
 ], TeacherController.prototype, "hasActiveSubscription", null);
+__decorate([
+    (0, common_1.Get)("me/students/:studentId/subscriptions/archived"),
+    (0, swagger_1.ApiOperation)({ summary: "Получить архивные (удалённые/истёкшие) абонементы ученика" }),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Param)("studentId")),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], TeacherController.prototype, "getArchivedSubscriptions", null);
+__decorate([
+    (0, common_1.Post)("me/calendar/preview"),
+    (0, swagger_1.ApiOperation)({
+        summary: "Получить превью событий из внешнего календаря",
+        description: "Загружает ICS календарь по URL или из содержимого файла и возвращает список событий для предпросмотра",
+    }),
+    (0, swagger_1.ApiBody)({ type: calendar_import_dto_1.CalendarPreviewDto }),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, calendar_import_dto_1.CalendarPreviewDto]),
+    __metadata("design:returntype", Promise)
+], TeacherController.prototype, "getCalendarPreview", null);
+__decorate([
+    (0, common_1.Post)("me/calendar/import"),
+    (0, swagger_1.ApiOperation)({
+        summary: "Импортировать события из внешнего календаря как уроки",
+        description: "Создаёт уроки на основе выбранных событий из внешнего календаря (по URL или из файла)",
+    }),
+    (0, swagger_1.ApiBody)({ type: calendar_import_dto_1.CalendarImportDto }),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, calendar_import_dto_1.CalendarImportDto]),
+    __metadata("design:returntype", Promise)
+], TeacherController.prototype, "importCalendar", null);
 exports.TeacherController = TeacherController = __decorate([
     (0, swagger_1.ApiTags)("teachers"),
     (0, common_1.Controller)("teachers"),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
     (0, roles_guard_1.Roles)("teacher"),
     (0, swagger_1.ApiBearerAuth)(),
-    __metadata("design:paramtypes", [teacher_service_1.TeacherService])
+    __metadata("design:paramtypes", [teacher_service_1.TeacherService,
+        calendar_import_service_1.CalendarImportService])
 ], TeacherController);
 //# sourceMappingURL=teacher.controller.js.map

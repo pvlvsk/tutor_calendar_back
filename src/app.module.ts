@@ -13,6 +13,7 @@ import { ParentModule } from "./parent/parent.module";
 import { SharedModule } from "./shared/shared.module";
 import { HealthModule } from "./health/health.module";
 import { BotModule } from "./bot/bot.module";
+import { AdminModule, RequestLoggerMiddleware } from "./admin";
 import { LoggingMiddleware } from "./shared/logging.middleware";
 import * as entities from "./database/entities";
 
@@ -44,10 +45,15 @@ import * as entities from "./database/entities";
     HealthModule,
     // Модуль Telegram бота
     BotModule,
+    // Модуль админ-панели
+    AdminModule,
   ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
+    // Логирование для консоли (dev)
     consumer.apply(LoggingMiddleware).forRoutes("*");
+    // Логирование запросов в БД для админ-панели
+    consumer.apply(RequestLoggerMiddleware).forRoutes("*");
   }
 }

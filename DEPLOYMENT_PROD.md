@@ -108,9 +108,6 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 # Логи
 docker compose -f docker-compose.prod.yml logs -f backend
-
-# Удалить всё (включая данные!)
-docker compose -f docker-compose.prod.yml down -v
 ```
 
 ---
@@ -260,23 +257,53 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 ## Миграции БД
 
-### Применение миграции
+Миграции хранятся в папке `migrations/` и применяются вручную.
+
+### Структура миграций
+
+```
+migrations/
+├── 001_group_lessons.sql      # Групповые уроки
+├── 002_meeting_url.sql        # Ссылка на встречу
+├── 003_subscriptions.sql      # Абонементы
+└── 004_student_archive.sql    # Архивация учеников
+```
+
+### Применение миграции (после git pull)
 
 ```bash
-# Загрузить миграцию
-scp migrations/003_new.sql root@server:~/tutor_calendar_back/migrations/
-
-# Применить на сервере
 cd ~/tutor_calendar_back
+
+# Применить конкретную миграцию
 docker compose -f docker-compose.prod.yml exec postgres \
-  psql -U postgres -d teach_mini_app -f /migrations/003_new.sql
+  psql -U postgres -d teach_mini_app -f /migrations/004_student_archive.sql
+```
+
+> **Примечание:** Папка `migrations/` автоматически монтируется в контейнер как `/migrations/`
+
+### Применение всех миграций (первый деплой)
+
+```bash
+cd ~/tutor_calendar_back
+
+# Применить все миграции по порядку
+for f in migrations/*.sql; do
+  echo "Applying $f..."
+  docker compose -f docker-compose.prod.yml exec -T postgres \
+    psql -U postgres -d teach_mini_app < "$f"
+done
 ```
 
 ### Проверка
 
 ```bash
+# Список таблиц
 docker compose -f docker-compose.prod.yml exec postgres \
   psql -U postgres -d teach_mini_app -c "\dt"
+
+# Структура конкретной таблицы
+docker compose -f docker-compose.prod.yml exec postgres \
+  psql -U postgres -d teach_mini_app -c "\d teacher_student_links"
 ```
 
 ---
@@ -347,17 +374,41 @@ docker exec -it teach-postgres psql -U postgres -c "ALTER USER postgres WITH PAS
 docker compose -f docker-compose.prod.yml restart backend
 ```
 
-### Полный сброс
-
-```bash
-docker compose -f docker-compose.prod.yml down -v
-docker compose -f docker-compose.prod.yml up -d --build
-# Затем установить пароль postgres
-```
-
 ---
 
 ## См. также
 
 - [DEPLOYMENT_DEV.md](./DEPLOYMENT_DEV.md) — локальная разработка
 - [TESTING.md](./TESTING.md) — тестирование
+
+---
+
+## ⚠️ Полный сброс БД (ОПАСНО!)
+
+> **Используй ТОЛЬКО если точно нужно удалить ВСЕ данные и начать с нуля.**
+> Это действие НЕОБРАТИМО! Сначала сделай бэкап!
+
+```bash
+# 0. Сделать бэкап (на всякий случай)
+docker compose -f docker-compose.prod.yml exec postgres \
+  pg_dump -U postgres teach_mini_app | gzip > backup_before_reset.sql.gz
+
+# 1. Остановить контейнеры И удалить volumes
+docker compose -f docker-compose.prod.yml down -v
+
+# 2. Запустить заново
+docker compose -f docker-compose.prod.yml up -d --build
+
+# 3. Настроить пароль postgres
+docker exec -it teach-postgres psql -U postgres -c "ALTER USER postgres WITH PASSWORD 'пароль_из_env';"
+
+# 4. Применить все миграции
+for f in migrations/*.sql; do
+  echo "Applying $f..."
+  docker compose -f docker-compose.prod.yml exec -T postgres \
+    psql -U postgres -d teach_mini_app < "$f"
+done
+
+# 5. Перезапустить backend
+docker compose -f docker-compose.prod.yml restart backend
+```
