@@ -62,6 +62,10 @@ export class RequestLog {
   @Column({ type: "text", nullable: true })
   errorStack: string | null;
 
+  /** Тело ответа (для ошибок 4xx/5xx) */
+  @Column({ type: "text", nullable: true })
+  responseBody: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 }

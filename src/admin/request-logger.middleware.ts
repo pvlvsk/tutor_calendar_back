@@ -5,6 +5,7 @@ import { AdminService } from "./admin.service";
 /**
  * Middleware для логирования всех HTTP запросов.
  * Записывает метод, путь, статус, время выполнения и ошибки.
+ * Для ошибок 4xx/5xx сохраняет тело ответа.
  */
 @Injectable()
 export class RequestLoggerMiddleware implements NestMiddleware {
@@ -36,6 +37,27 @@ export class RequestLoggerMiddleware implements NestMiddleware {
         requestBody = "[не удалось сериализовать]";
       }
     }
+
+    // Переменная для хранения тела ответа (для ошибок)
+    let responseBody: string | null = null;
+
+    // Перехватываем res.json для захвата тела ответа при ошибках
+    const originalJson = res.json.bind(res);
+    res.json = (body: unknown) => {
+      // Сохраняем тело ответа только для ошибок (4xx, 5xx)
+      // На этом этапе statusCode ещё не установлен, проверим по телу
+      if (body && typeof body === "object" && "statusCode" in body) {
+        const statusCode = (body as any).statusCode;
+        if (statusCode >= 400) {
+          try {
+            responseBody = JSON.stringify(body).substring(0, 2000);
+          } catch {
+            responseBody = "[не удалось сериализовать ответ]";
+          }
+        }
+      }
+      return originalJson(body);
+    };
 
     // Перехватываем завершение ответа
     res.on("finish", async () => {
@@ -86,6 +108,7 @@ export class RequestLoggerMiddleware implements NestMiddleware {
           requestBody,
           errorMessage,
           errorStack,
+          responseBody,
         });
       } catch (err) {
         // Не блокируем запрос если логирование упало
