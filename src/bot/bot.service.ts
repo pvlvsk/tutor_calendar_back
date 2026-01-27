@@ -564,7 +564,9 @@ export class BotService {
     firstName: string
   ): Promise<void> {
     const botUsername = process.env.BOT_USERNAME || "your_bot";
-    const webAppUrl = process.env.WEBAPP_URL || `https://t.me/${botUsername}/app`;
+    const webAppUrl = process.env.WEBAPP_URL;
+    
+    this.logger.log(`WEBAPP_URL from env: ${webAppUrl}`);
 
     const welcomeText =
       `👋 <b>Привет, ${firstName}!</b>\n\n` +
@@ -578,17 +580,31 @@ export class BotService {
       `• Напоминания о уроках\n\n` +
       `Нажмите кнопку ниже, чтобы начать:`;
 
-    await this.sendMessage(chatId, welcomeText, {
-      replyMarkup: {
-        inline_keyboard: [
-          [
-            {
-              text: "🚀 Открыть приложение",
-              web_app: { url: webAppUrl },
-            },
+    // Если WEBAPP_URL задан — используем web_app кнопку, иначе обычную ссылку
+    const keyboard = webAppUrl
+      ? {
+          inline_keyboard: [
+            [
+              {
+                text: "🚀 Открыть приложение",
+                web_app: { url: webAppUrl },
+              },
+            ],
           ],
-        ],
-      },
+        }
+      : {
+          inline_keyboard: [
+            [
+              {
+                text: "🚀 Открыть приложение",
+                url: `https://t.me/${botUsername}/app`,
+              },
+            ],
+          ],
+        };
+
+    await this.sendMessage(chatId, welcomeText, {
+      replyMarkup: keyboard,
     });
 
     this.logger.log(`Start command handled for chat ${chatId}`);

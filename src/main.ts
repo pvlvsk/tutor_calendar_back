@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core'
 import { ValidationPipe, Logger } from '@nestjs/common'
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger'
+import { json, urlencoded } from 'express'
 import { AppModule } from './app.module'
 
 async function bootstrap() {
@@ -11,6 +12,10 @@ async function bootstrap() {
   })
 
   const logger = new Logger('Bootstrap')
+  
+  // Увеличиваем лимит для body (для импорта больших ICS файлов)
+  app.use(json({ limit: '10mb' }))
+  app.use(urlencoded({ extended: true, limit: '10mb' }))
   
   app.setGlobalPrefix('api')
   app.enableCors({
