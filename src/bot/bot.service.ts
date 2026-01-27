@@ -30,6 +30,31 @@ interface TelegramResponse {
   description?: string;
 }
 
+interface TelegramUpdate {
+  update_id: number;
+  message?: {
+    message_id: number;
+    from: {
+      id: number;
+      is_bot: boolean;
+      first_name: string;
+      last_name?: string;
+      username?: string;
+    };
+    chat: {
+      id: number;
+      type: string;
+    };
+    date: number;
+    text?: string;
+    entities?: Array<{
+      type: string;
+      offset: number;
+      length: number;
+    }>;
+  };
+}
+
 @Injectable()
 export class BotService {
   private readonly logger = new Logger(BotService.name);
@@ -505,6 +530,140 @@ export class BotService {
       return this.sendMessageWithMiniApp(telegramId, text, buttonText);
     } else {
       return this.sendMessage(telegramId, text);
+    }
+  }
+
+  // ============================================
+  // WEBHOOK — ОБРАБОТКА КОМАНД
+  // ============================================
+
+  /**
+   * Обрабатывает входящий update от Telegram
+   */
+  async handleWebhook(update: TelegramUpdate): Promise<void> {
+    if (!update.message?.text) {
+      return;
+    }
+
+    const { message } = update;
+    const chatId = message.chat.id;
+    const text = message.text!; // Уже проверено выше
+    const firstName = message.from.first_name;
+
+    // Проверяем команду /start
+    if (text.startsWith("/start")) {
+      await this.handleStartCommand(chatId, firstName);
+    }
+  }
+
+  /**
+   * Обрабатывает команду /start
+   */
+  private async handleStartCommand(
+    chatId: number,
+    firstName: string
+  ): Promise<void> {
+    const botUsername = process.env.BOT_USERNAME || "your_bot";
+    const webAppUrl = process.env.WEBAPP_URL || `https://t.me/${botUsername}/app`;
+
+    const welcomeText =
+      `👋 <b>Привет, ${firstName}!</b>\n\n` +
+      `Добро пожаловать в <b>Teach</b> — приложение для управления репетиторством.\n\n` +
+      `🎓 <b>Для репетиторов:</b>\n` +
+      `• Удобное расписание\n` +
+      `• Управление учениками\n` +
+      `• Отслеживание оплат\n\n` +
+      `📚 <b>Для учеников:</b>\n` +
+      `• Расписание занятий\n` +
+      `• Напоминания о уроках\n\n` +
+      `Нажмите кнопку ниже, чтобы начать:`;
+
+    await this.sendMessage(chatId, welcomeText, {
+      replyMarkup: {
+        inline_keyboard: [
+          [
+            {
+              text: "🚀 Открыть приложение",
+              web_app: { url: webAppUrl },
+            },
+          ],
+        ],
+      },
+    });
+
+    this.logger.log(`Start command handled for chat ${chatId}`);
+  }
+
+  /**
+   * Устанавливает webhook для бота
+   */
+  async setWebhook(webhookUrl: string): Promise<boolean> {
+    if (!this.isConfigured()) {
+      this.logger.warn("Bot token not configured, cannot set webhook");
+      return false;
+    }
+
+    try {
+      const response = await fetch(`${this.apiUrl}/setWebhook`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: webhookUrl,
+          allowed_updates: ["message"],
+        }),
+      });
+
+      const data: TelegramResponse = await response.json();
+
+      if (!data.ok) {
+        this.logger.error(`Failed to set webhook: ${data.description}`);
+        return false;
+      }
+
+      this.logger.log(`Webhook set to: ${webhookUrl}`);
+      return true;
+    } catch (error) {
+      this.logger.error(`Error setting webhook: ${(error as Error).message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Удаляет webhook (для перехода на polling)
+   */
+  async deleteWebhook(): Promise<boolean> {
+    if (!this.isConfigured()) {
+      return false;
+    }
+
+    try {
+      const response = await fetch(`${this.apiUrl}/deleteWebhook`, {
+        method: "POST",
+      });
+
+      const data: TelegramResponse = await response.json();
+      return data.ok;
+    } catch (error) {
+      this.logger.error(`Error deleting webhook: ${(error as Error).message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Получает информацию о текущем webhook
+   */
+  async getWebhookInfo(): Promise<unknown> {
+    if (!this.isConfigured()) {
+      return null;
+    }
+
+    try {
+      const response = await fetch(`${this.apiUrl}/getWebhookInfo`);
+      const data: TelegramResponse = await response.json();
+      return data.result;
+    } catch (error) {
+      this.logger.error(`Error getting webhook info: ${(error as Error).message}`);
+      return null;
     }
   }
 }

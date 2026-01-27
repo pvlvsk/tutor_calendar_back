@@ -56,6 +56,11 @@ interface TestMessageDto {
   buttonText?: string;
 }
 
+/** Установка webhook */
+interface SetWebhookDto {
+  url: string;
+}
+
 // ============================================
 // КОНТРОЛЛЕР
 // ============================================
@@ -179,5 +184,83 @@ export class BotController {
       telegramId: dto.telegramId,
       message: success ? "Message sent" : "Failed to send message",
     };
+  }
+
+  // ============================================
+  // WEBHOOK
+  // ============================================
+
+  /**
+   * Webhook для получения обновлений от Telegram
+   * POST /api/bot/webhook
+   *
+   * Этот эндпоинт вызывается Telegram при каждом входящем сообщении.
+   * Путь должен быть секретным (можно добавить токен в URL).
+   */
+  @Post("webhook")
+  async handleWebhook(@Body() update: unknown) {
+    // Обрабатываем update асинхронно, не блокируя ответ Telegram
+    this.botService
+      .handleWebhook(update as any)
+      .catch((err) => console.error("Webhook error:", err));
+
+    // Telegram ожидает быстрый ответ 200 OK
+    return { ok: true };
+  }
+
+  /**
+   * Установить webhook
+   * POST /api/bot/set-webhook
+   *
+   * Headers:
+   *   X-Admin-Secret: <BOT_TOKEN>
+   *
+   * Body:
+   *   { "url": "https://api.your-domain.com/api/bot/webhook" }
+   */
+  @Post("set-webhook")
+  async setWebhook(
+    @Headers("x-admin-secret") adminSecret: string,
+    @Body() dto: SetWebhookDto
+  ) {
+    if (!adminSecret || adminSecret !== process.env.BOT_TOKEN) {
+      throw new UnauthorizedException("Invalid admin secret");
+    }
+
+    const success = await this.botService.setWebhook(dto.url);
+
+    return {
+      success,
+      url: dto.url,
+      message: success ? "Webhook set successfully" : "Failed to set webhook",
+    };
+  }
+
+  /**
+   * Получить информацию о webhook
+   * GET /api/bot/webhook-info
+   */
+  @Get("webhook-info")
+  async getWebhookInfo(@Headers("x-admin-secret") adminSecret: string) {
+    if (!adminSecret || adminSecret !== process.env.BOT_TOKEN) {
+      throw new UnauthorizedException("Invalid admin secret");
+    }
+
+    const info = await this.botService.getWebhookInfo();
+    return { info };
+  }
+
+  /**
+   * Удалить webhook
+   * POST /api/bot/delete-webhook
+   */
+  @Post("delete-webhook")
+  async deleteWebhook(@Headers("x-admin-secret") adminSecret: string) {
+    if (!adminSecret || adminSecret !== process.env.BOT_TOKEN) {
+      throw new UnauthorizedException("Invalid admin secret");
+    }
+
+    const success = await this.botService.deleteWebhook();
+    return { success };
   }
 }

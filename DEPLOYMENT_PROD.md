@@ -39,7 +39,8 @@ NODE_ENV=production
 POSTGRES_PASSWORD=надёжный_пароль_для_БД
 JWT_SECRET=секретный_ключ_минимум_32_символа
 BOT_TOKEN=токен_от_BotFather
-BOT_USERNAME=имя_бота
+BOT_USERNAME=имя_бота_без_@
+WEBAPP_URL=https://quickbotics.ru
 ```
 
 ### 4. Запустить
@@ -167,6 +168,44 @@ sudo certbot --nginx -d api.your-domain.com
 
 ```bash
 curl https://api.your-domain.com/api/health
+```
+
+> **⚠️ CORS**: Заголовки CORS обрабатываются на уровне NestJS (`src/main.ts`).
+> **НЕ добавляй** `add_header Access-Control-*` в nginx — это приведёт к дублированию заголовков и ошибке CORS.
+
+---
+
+## Настройка Telegram Webhook
+
+Чтобы бот отвечал на команду `/start`, нужно настроить webhook.
+
+### 1. Установить webhook
+
+```bash
+curl -X POST https://api.your-domain.com/api/bot/set-webhook \
+  -H "Content-Type: application/json" \
+  -H "X-Admin-Secret: YOUR_BOT_TOKEN" \
+  -d '{"url": "https://api.your-domain.com/api/bot/webhook"}'
+```
+
+### 2. Проверить webhook
+
+```bash
+curl -X GET https://api.your-domain.com/api/bot/webhook-info \
+  -H "X-Admin-Secret: YOUR_BOT_TOKEN"
+```
+
+### 3. Проверить работу
+
+1. Открой бота в Telegram
+2. Нажми `/start`
+3. Должно прийти приветственное сообщение с кнопкой "Открыть приложение"
+
+### Удалить webhook (если нужно)
+
+```bash
+curl -X POST https://api.your-domain.com/api/bot/delete-webhook \
+  -H "X-Admin-Secret: YOUR_BOT_TOKEN"
 ```
 
 ---
