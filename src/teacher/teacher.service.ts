@@ -290,11 +290,18 @@ export class TeacherService {
 
   /**
    * Получает список активных (неархивированных) учеников учителя
+   * Также возвращает количество архивных учеников для badge
    */
   async getStudents(teacherId: string) {
+    // Получаем активных учеников
     const links = await this.linkRepo.find({
       where: { teacherId, archivedAt: IsNull() },
       relations: ["student", "student.user"],
+    });
+
+    // Считаем количество архивных учеников (без загрузки всех данных)
+    const archivedCount = await this.linkRepo.count({
+      where: { teacherId, archivedAt: Not(IsNull()) },
     });
 
     const allSubjects = await this.subjectRepo.find({ where: { teacherId } });
@@ -339,7 +346,7 @@ export class TeacherService {
       });
     }
 
-    return students;
+    return { students, archivedCount };
   }
 
   /**
