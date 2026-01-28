@@ -119,6 +119,44 @@ export class AdminController {
   }
 
   /**
+   * Логи запросов с информацией о пользователе (для страницы деталей).
+   */
+  @Get("requests/logs-detailed")
+  @UseGuards(AdminAuthGuard)
+  async getRequestLogsDetailed(
+    @Query("page") page?: string,
+    @Query("limit") limit?: string,
+    @Query("status") status?: "all" | "success" | "error",
+    @Query("method") method?: string,
+    @Query("path") path?: string
+  ) {
+    return this.adminService.getRequestLogsWithUserInfo(
+      parseInt(page || "1"),
+      parseInt(limit || "50"),
+      status,
+      method,
+      path
+    );
+  }
+
+  /**
+   * Данные для графика запросов (успешные/ошибки по времени).
+   */
+  @Get("requests/chart")
+  @UseGuards(AdminAuthGuard)
+  async getRequestsChart(
+    @Query("from") from: string,
+    @Query("to") to: string,
+    @Query("interval") interval?: "minute" | "hour" | "day"
+  ) {
+    return this.adminService.getRequestsChartData(
+      new Date(from),
+      new Date(to),
+      interval || "hour"
+    );
+  }
+
+  /**
    * Аналитические события.
    */
   @Get("analytics/events")

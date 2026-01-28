@@ -64,11 +64,12 @@ export class RequestLoggerMiddleware implements NestMiddleware {
       const durationMs = Date.now() - startTime;
       const statusCode = res.statusCode;
 
-      // Пропускаем health check и статику
+      // Пропускаем health check, статику и запросы админки (чтобы не логировать саму себя)
       if (
         originalUrl.includes("/health") ||
         originalUrl.includes("/favicon") ||
-        originalUrl.startsWith("/assets")
+        originalUrl.startsWith("/assets") ||
+        originalUrl.startsWith("/api/admin")
       ) {
         return;
       }

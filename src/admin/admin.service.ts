@@ -173,12 +173,32 @@ export class AdminService {
       .orderBy("date", "ASC")
       .getRawMany();
 
-    // Объединяем данные
+    // Объединяем данные (нормализуем формат даты)
     const teacherMap = new Map<string, number>();
     const studentMap = new Map<string, number>();
 
-    teachers.forEach((t) => teacherMap.set(t.date, parseInt(t.count)));
-    students.forEach((s) => studentMap.set(s.date, parseInt(s.count)));
+    // PostgreSQL DATE() может вернуть Date объект или строку в разных форматах
+    const normalizeDate = (d: unknown): string => {
+      if (d instanceof Date) {
+        return d.toISOString().split("T")[0];
+      }
+      const dateStr = String(d);
+      // Если уже в формате YYYY-MM-DD
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+        return dateStr;
+      }
+      // Пробуем распарсить
+      return new Date(dateStr).toISOString().split("T")[0];
+    };
+
+    teachers.forEach((t) => {
+      const key = normalizeDate(t.date);
+      teacherMap.set(key, parseInt(t.count));
+    });
+    students.forEach((s) => {
+      const key = normalizeDate(s.date);
+      studentMap.set(key, parseInt(s.count));
+    });
 
     // Генерируем все даты в диапазоне
     const result: ChartDataPoint[] = [];
@@ -366,6 +386,110 @@ export class AdminService {
       .getManyAndCount();
 
     return { logs, total };
+  }
+
+  /**
+   * Получение логов с информацией о пользователе.
+   */
+  async getRequestLogsWithUserInfo(
+    page: number = 1,
+    limit: number = 50,
+    statusFilter?: "all" | "success" | "error",
+    method?: string,
+    path?: string
+  ): Promise<{
+    logs: Array<RequestLog & { userName?: string; userUsername?: string }>;
+    total: number;
+  }> {
+    const query = this.requestLogRepo
+      .createQueryBuilder("r")
+      .leftJoin("users", "u", "u.id = r.userId")
+      .addSelect("u.firstName", "userFirstName")
+      .addSelect("u.lastName", "userLastName")
+      .addSelect("u.username", "userUsername");
+
+    if (statusFilter === "success") {
+      query.andWhere("r.statusCode < 400");
+    } else if (statusFilter === "error") {
+      query.andWhere("r.statusCode >= 400");
+    }
+
+    if (method && path) {
+      query.andWhere("r.method = :method", { method });
+      // Фильтруем по нормализованному пути
+      const normalizedPath = path;
+      query.andWhere(
+        `REGEXP_REPLACE(r.path, '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', ':id', 'gi') = :normalizedPath`,
+        { normalizedPath }
+      );
+    }
+
+    const total = await query.getCount();
+
+    const rawResults = await query
+      .orderBy("r.createdAt", "DESC")
+      .offset((page - 1) * limit)
+      .limit(limit)
+      .getRawAndEntities();
+
+    // Объединяем данные лога с данными пользователя
+    const logs = rawResults.entities.map((log, index) => {
+      const raw = rawResults.raw[index];
+      const firstName = raw.userFirstName || "";
+      const lastName = raw.userLastName || "";
+      const userName = [firstName, lastName].filter(Boolean).join(" ") || undefined;
+      return {
+        ...log,
+        userName,
+        userUsername: raw.userUsername || undefined,
+      };
+    });
+
+    return { logs, total };
+  }
+
+  /**
+   * Получение статистики запросов по времени для графика.
+   */
+  async getRequestsChartData(
+    from: Date,
+    to: Date,
+    interval: "minute" | "hour" | "day" = "hour"
+  ): Promise<Array<{ time: string; success: number; errors: number }>> {
+    let dateFormat: string;
+    let dateTrunc: string;
+
+    switch (interval) {
+      case "minute":
+        dateFormat = "YYYY-MM-DD HH24:MI";
+        dateTrunc = "minute";
+        break;
+      case "hour":
+        dateFormat = "YYYY-MM-DD HH24:00";
+        dateTrunc = "hour";
+        break;
+      case "day":
+      default:
+        dateFormat = "YYYY-MM-DD";
+        dateTrunc = "day";
+        break;
+    }
+
+    const result = await this.requestLogRepo
+      .createQueryBuilder("r")
+      .select(`TO_CHAR(DATE_TRUNC('${dateTrunc}', r."createdAt"), '${dateFormat}')`, "time")
+      .addSelect("COUNT(*) FILTER (WHERE r.statusCode < 400)", "success")
+      .addSelect("COUNT(*) FILTER (WHERE r.statusCode >= 400)", "errors")
+      .where("r.createdAt BETWEEN :from AND :to", { from, to })
+      .groupBy(`DATE_TRUNC('${dateTrunc}', r."createdAt")`)
+      .orderBy(`DATE_TRUNC('${dateTrunc}', r."createdAt")`, "ASC")
+      .getRawMany();
+
+    return result.map((r) => ({
+      time: r.time,
+      success: parseInt(r.success) || 0,
+      errors: parseInt(r.errors) || 0,
+    }));
   }
 
   /**
