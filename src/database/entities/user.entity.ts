@@ -4,6 +4,7 @@ import {
   PrimaryGeneratedColumn,
   CreateDateColumn,
   UpdateDateColumn,
+  DeleteDateColumn,
   OneToOne,
 } from "typeorm";
 import { TeacherProfile } from "./teacher-profile.entity";
@@ -42,6 +43,10 @@ export class User {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  /** Дата удаления аккаунта (soft delete). Null = активный аккаунт */
+  @DeleteDateColumn({ nullable: true })
+  deletedAt: Date | null;
 
   @OneToOne(() => TeacherProfile, (profile) => profile.user)
   teacherProfile: TeacherProfile;

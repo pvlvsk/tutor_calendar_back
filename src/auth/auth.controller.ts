@@ -89,4 +89,18 @@ export class AuthController {
       isBetaTester: req.user.isBetaTester || false,
     }
   }
+
+  @Post('delete-account')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Мягкое удаление аккаунта (можно восстановить в течение 7 дней)' })
+  deleteAccount(@Request() req: any) {
+    return this.authService.deleteAccount(req.user.sub)
+  }
+
+  @Post('restore-account')
+  @ApiOperation({ summary: 'Восстановить удалённый аккаунт' })
+  restoreAccount(@Body() dto: InitDto) {
+    return this.authService.restoreAccount(dto.initData)
+  }
 }

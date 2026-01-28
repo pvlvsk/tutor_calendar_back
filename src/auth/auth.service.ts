@@ -26,6 +26,14 @@ import {
   Invitation,
   TeacherStudentLink,
   ParentStudentRelation,
+  Lesson,
+  LessonSeries,
+  Subject,
+  Subscription,
+  UserNotificationSettings,
+  AnalyticsEvent,
+  LessonStudent,
+  LessonSeriesStudent,
 } from "../database/entities";
 import {
   generateInviteUrl,
@@ -70,6 +78,22 @@ export class AuthService {
     private teacherStudentLinkRepository: Repository<TeacherStudentLink>,
     @InjectRepository(ParentStudentRelation)
     private parentStudentRelationRepository: Repository<ParentStudentRelation>,
+    @InjectRepository(Lesson)
+    private lessonRepository: Repository<Lesson>,
+    @InjectRepository(LessonSeries)
+    private lessonSeriesRepository: Repository<LessonSeries>,
+    @InjectRepository(Subject)
+    private subjectRepository: Repository<Subject>,
+    @InjectRepository(Subscription)
+    private subscriptionRepository: Repository<Subscription>,
+    @InjectRepository(UserNotificationSettings)
+    private notificationSettingsRepository: Repository<UserNotificationSettings>,
+    @InjectRepository(AnalyticsEvent)
+    private analyticsEventRepository: Repository<AnalyticsEvent>,
+    @InjectRepository(LessonStudent)
+    private lessonStudentRepository: Repository<LessonStudent>,
+    @InjectRepository(LessonSeriesStudent)
+    private lessonSeriesStudentRepository: Repository<LessonSeriesStudent>,
     private jwtService: JwtService,
     private telegramService: TelegramService,
     private botService: BotService
@@ -78,6 +102,9 @@ export class AuthService {
   // ============================================
   // ОСНОВНЫЕ МЕТОДЫ АВТОРИЗАЦИИ
   // ============================================
+
+  /** Количество дней для восстановления удалённого аккаунта */
+  private readonly ACCOUNT_RESTORE_DAYS = 7;
 
   /**
    * Инициализация пользователя через Telegram initData
@@ -94,10 +121,15 @@ export class AuthService {
       `Init: tg=${telegramUser.id} @${telegramUser.username || "no_username"}`
     );
 
-    const user = await this.userRepository.findOne({
-      where: { telegramId: String(telegramUser.id) },
-      relations: ["teacherProfile", "studentProfile", "parentProfile"],
-    });
+    // Ищем пользователя включая удалённых (soft delete)
+    const user = await this.userRepository
+      .createQueryBuilder("user")
+      .withDeleted()
+      .leftJoinAndSelect("user.teacherProfile", "teacherProfile")
+      .leftJoinAndSelect("user.studentProfile", "studentProfile")
+      .leftJoinAndSelect("user.parentProfile", "parentProfile")
+      .where("user.telegramId = :telegramId", { telegramId: String(telegramUser.id) })
+      .getOne();
 
     if (!user) {
       this.logger.log(`Init: new user tg=${telegramUser.id}`);
@@ -110,6 +142,51 @@ export class AuthService {
           username: telegramUser.username,
         },
       };
+    }
+
+    // Проверяем, удалён ли аккаунт
+    if (user.deletedAt) {
+      const deletedDate = new Date(user.deletedAt);
+      const now = new Date();
+      const daysSinceDelete = Math.floor(
+        (now.getTime() - deletedDate.getTime()) / (1000 * 60 * 60 * 24)
+      );
+
+      if (daysSinceDelete < this.ACCOUNT_RESTORE_DAYS) {
+        // Аккаунт можно восстановить
+        const daysLeft = this.ACCOUNT_RESTORE_DAYS - daysSinceDelete;
+        this.logger.log(
+          `Init: deleted user tg=${telegramUser.id}, can restore, ${daysLeft} days left`
+        );
+        return {
+          isNewUser: false,
+          isDeleted: true,
+          canRestore: true,
+          daysLeft,
+          deletedAt: user.deletedAt.toISOString(),
+          telegramUser: {
+            id: telegramUser.id,
+            firstName: telegramUser.first_name,
+            lastName: telegramUser.last_name,
+            username: telegramUser.username,
+          },
+        };
+      } else {
+        // Срок восстановления истёк — полностью удаляем данные и создаём нового пользователя
+        this.logger.log(
+          `Init: deleted user tg=${telegramUser.id}, restore period expired, purging data`
+        );
+        await this.purgeDeletedUser(user);
+        return {
+          isNewUser: true,
+          telegramUser: {
+            id: telegramUser.id,
+            firstName: telegramUser.first_name,
+            lastName: telegramUser.last_name,
+            username: telegramUser.username,
+          },
+        };
+      }
     }
 
     const roles = this.getUserRoles(user);
@@ -878,5 +955,170 @@ export class AuthService {
       };
     }
     return { id: profile.id };
+  }
+
+  /**
+   * Soft delete аккаунта пользователя
+   * Данные сохраняются 7 дней для возможности восстановления
+   */
+  async deleteAccount(userId: string) {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException("USER_NOT_FOUND");
+    }
+
+    this.logger.log(`DeleteAccount: soft delete for userId=${userId}`);
+
+    // Устанавливаем дату удаления (soft delete)
+    user.deletedAt = new Date();
+    await this.userRepository.save(user);
+
+    this.logger.log(`DeleteAccount: completed for userId=${userId}`);
+
+    return {
+      success: true,
+      message: "Аккаунт помечен для удаления",
+      deletedAt: user.deletedAt.toISOString(),
+      restoreDays: this.ACCOUNT_RESTORE_DAYS,
+    };
+  }
+
+  /**
+   * Восстановление удалённого аккаунта
+   */
+  async restoreAccount(initData: string) {
+    const telegramUser = this.telegramService.validateInitData(initData);
+    if (!telegramUser) {
+      throw new UnauthorizedException("INVALID_INIT_DATA");
+    }
+
+    // Ищем удалённого пользователя
+    const user = await this.userRepository
+      .createQueryBuilder("user")
+      .withDeleted()
+      .leftJoinAndSelect("user.teacherProfile", "teacherProfile")
+      .leftJoinAndSelect("user.studentProfile", "studentProfile")
+      .leftJoinAndSelect("user.parentProfile", "parentProfile")
+      .where("user.telegramId = :telegramId", { telegramId: String(telegramUser.id) })
+      .andWhere("user.deletedAt IS NOT NULL")
+      .getOne();
+
+    if (!user) {
+      throw new NotFoundException("DELETED_USER_NOT_FOUND");
+    }
+
+    // Проверяем срок восстановления
+    const deletedDate = new Date(user.deletedAt!);
+    const now = new Date();
+    const daysSinceDelete = Math.floor(
+      (now.getTime() - deletedDate.getTime()) / (1000 * 60 * 60 * 24)
+    );
+
+    if (daysSinceDelete >= this.ACCOUNT_RESTORE_DAYS) {
+      throw new GoneException("RESTORE_PERIOD_EXPIRED");
+    }
+
+    // Восстанавливаем аккаунт
+    user.deletedAt = null;
+    await this.userRepository.save(user);
+
+    const roles = this.getUserRoles(user);
+    this.logger.log(`RestoreAccount: restored userId=${user.id} roles=${roles.join(",")}`);
+
+    if (roles.length === 1) {
+      const token = this.generateToken(user, roles[0]);
+      return {
+        success: true,
+        message: "Аккаунт восстановлен",
+        user: this.formatUser(user),
+        roles,
+        currentRole: roles[0],
+        token,
+      };
+    }
+
+    return {
+      success: true,
+      message: "Аккаунт восстановлен",
+      user: this.formatUser(user),
+      roles,
+      currentRole: null,
+      token: null,
+    };
+  }
+
+  /**
+   * Полное удаление данных пользователя (после истечения срока восстановления)
+   */
+  private async purgeDeletedUser(user: User) {
+    this.logger.log(`PurgeDeletedUser: starting for userId=${user.id}`);
+
+    // Загружаем профили если не загружены
+    const fullUser = await this.userRepository
+      .createQueryBuilder("user")
+      .withDeleted()
+      .leftJoinAndSelect("user.teacherProfile", "teacherProfile")
+      .leftJoinAndSelect("user.studentProfile", "studentProfile")
+      .leftJoinAndSelect("user.parentProfile", "parentProfile")
+      .where("user.id = :id", { id: user.id })
+      .getOne();
+
+    if (!fullUser) return;
+
+    // Удаляем данные учителя
+    if (fullUser.teacherProfile) {
+      const teacherId = fullUser.teacherProfile.id;
+      this.logger.log(`PurgeDeletedUser: deleting teacher data for teacherId=${teacherId}`);
+
+      await this.lessonRepository.delete({ teacherId });
+      await this.lessonSeriesRepository.delete({ teacherId });
+      await this.subjectRepository.delete({ teacherId });
+      await this.subscriptionRepository.delete({ teacherId });
+      await this.invitationRepository.delete({ teacherId });
+      await this.teacherStudentLinkRepository.delete({ teacherId });
+      await this.parentStudentRelationRepository.delete({ teacherId });
+      await this.teacherProfileRepository.delete({ id: teacherId });
+    }
+
+    // Удаляем данные ученика
+    if (fullUser.studentProfile) {
+      const studentId = fullUser.studentProfile.id;
+      this.logger.log(`PurgeDeletedUser: deleting student data for studentId=${studentId}`);
+
+      await this.lessonStudentRepository.delete({ studentId });
+      await this.lessonSeriesStudentRepository.delete({ studentId });
+      await this.subscriptionRepository.delete({ studentId });
+      await this.teacherStudentLinkRepository.delete({ studentId });
+      await this.parentStudentRelationRepository.delete({ studentId });
+      await this.studentProfileRepository.delete({ id: studentId });
+    }
+
+    // Удаляем данные родителя
+    if (fullUser.parentProfile) {
+      const parentId = fullUser.parentProfile.id;
+      this.logger.log(`PurgeDeletedUser: deleting parent data for parentId=${parentId}`);
+
+      await this.parentStudentRelationRepository.delete({ parentId });
+      await this.parentProfileRepository.delete({ id: parentId });
+    }
+
+    // Удаляем настройки уведомлений
+    await this.notificationSettingsRepository.delete({ userId: fullUser.id });
+
+    // Удаляем события аналитики
+    await this.analyticsEventRepository.delete({ userId: fullUser.id });
+
+    // Полностью удаляем пользователя (hard delete)
+    await this.userRepository
+      .createQueryBuilder()
+      .delete()
+      .from(User)
+      .where("id = :id", { id: fullUser.id })
+      .execute();
+
+    this.logger.log(`PurgeDeletedUser: completed for userId=${fullUser.id}`);
   }
 }
