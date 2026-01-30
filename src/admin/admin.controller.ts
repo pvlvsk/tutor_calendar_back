@@ -128,14 +128,16 @@ export class AdminController {
     @Query("limit") limit?: string,
     @Query("status") status?: "all" | "success" | "error",
     @Query("method") method?: string,
-    @Query("path") path?: string
+    @Query("path") path?: string,
+    @Query("user") userSearch?: string
   ) {
     return this.adminService.getRequestLogsWithUserInfo(
       parseInt(page || "1"),
       parseInt(limit || "50"),
       status,
       method,
-      path
+      path,
+      userSearch
     );
   }
 

@@ -1,7 +1,8 @@
-import { Injectable, UnauthorizedException } from "@nestjs/common";
+import { Injectable, UnauthorizedException, Logger } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository, Between } from "typeorm";
+import { Repository, Between, LessThan } from "typeorm";
 import { JwtService } from "@nestjs/jwt";
+import { Cron, CronExpression } from "@nestjs/schedule";
 import * as bcrypt from "bcrypt";
 import {
   AdminUser,
@@ -50,6 +51,14 @@ export interface EndpointStats {
 
 @Injectable()
 export class AdminService {
+  private readonly logger = new Logger(AdminService.name);
+
+  // Количество дней хранения логов (по умолчанию 7 дней)
+  private readonly LOG_RETENTION_DAYS = parseInt(
+    process.env.LOG_RETENTION_DAYS || "7",
+    10
+  );
+
   constructor(
     @InjectRepository(AdminUser)
     private adminUserRepo: Repository<AdminUser>,
@@ -65,6 +74,52 @@ export class AdminService {
     private studentRepo: Repository<StudentProfile>,
     private jwtService: JwtService
   ) {}
+
+  /**
+   * Очистка старых логов запросов (запускается каждый день в 3:00)
+   */
+  @Cron(CronExpression.EVERY_DAY_AT_3AM)
+  async cleanupOldLogs(): Promise<void> {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - this.LOG_RETENTION_DAYS);
+
+    try {
+      const result = await this.requestLogRepo.delete({
+        createdAt: LessThan(cutoffDate),
+      });
+
+      if (result.affected && result.affected > 0) {
+        this.logger.log(
+          `Очистка логов: удалено ${result.affected} записей старше ${this.LOG_RETENTION_DAYS} дней`
+        );
+      }
+    } catch (error) {
+      this.logger.error("Ошибка при очистке старых логов:", error);
+    }
+  }
+
+  /**
+   * Очистка старых аналитических событий (запускается каждый день в 3:30)
+   */
+  @Cron("30 3 * * *")
+  async cleanupOldAnalyticsEvents(): Promise<void> {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - this.LOG_RETENTION_DAYS);
+
+    try {
+      const result = await this.analyticsEventRepo.delete({
+        createdAt: LessThan(cutoffDate),
+      });
+
+      if (result.affected && result.affected > 0) {
+        this.logger.log(
+          `Очистка аналитики: удалено ${result.affected} событий старше ${this.LOG_RETENTION_DAYS} дней`
+        );
+      }
+    } catch (error) {
+      this.logger.error("Ошибка при очистке старых аналитических событий:", error);
+    }
+  }
 
   /**
    * Авторизация администратора.
@@ -396,7 +451,8 @@ export class AdminService {
     limit: number = 50,
     statusFilter?: "all" | "success" | "error",
     method?: string,
-    path?: string
+    path?: string,
+    userSearch?: string
   ): Promise<{
     logs: Array<RequestLog & { userName?: string; userUsername?: string }>;
     total: number;
@@ -422,6 +478,30 @@ export class AdminService {
         `REGEXP_REPLACE(r.path, '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', ':id', 'gi') = :normalizedPath`,
         { normalizedPath }
       );
+    }
+
+    // Фильтрация по пользователю (userId или username)
+    if (userSearch) {
+      // Убираем @ если пользователь его ввёл
+      const cleanUsername = userSearch.startsWith("@")
+        ? userSearch.slice(1)
+        : userSearch;
+
+      // Проверяем, похоже ли на UUID
+      const isUuid =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          cleanUsername
+        );
+
+      if (isUuid) {
+        // Точный поиск по userId
+        query.andWhere("r.userId = :userId", { userId: cleanUsername });
+      } else {
+        // Поиск по username (частичное совпадение)
+        query.andWhere("LOWER(u.username) LIKE LOWER(:userSearchLike)", {
+          userSearchLike: `%${cleanUsername}%`,
+        });
+      }
     }
 
     const total = await query.getCount();
