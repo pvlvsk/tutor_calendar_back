@@ -70,23 +70,26 @@ export declare class TeacherService {
         success: boolean;
     }>;
     getStudents(teacherId: string): Promise<{
-        studentId: string;
-        studentUser: {
-            id: any;
-            firstName: any;
-            lastName: any;
-            username: any;
-        };
-        customFields: Record<string, string>;
-        subjects: {
-            subjectId: string;
-            name: string;
-            colorHex: string;
+        students: {
+            studentId: string;
+            studentUser: {
+                id: any;
+                firstName: any;
+                lastName: any;
+                username: any;
+            };
+            customFields: Record<string, string>;
+            subjects: {
+                subjectId: string;
+                name: string;
+                colorHex: string;
+            }[];
+            stats: import("../shared").AttendanceStats;
+            debt: import("../shared").DebtInfo;
+            createdAt: string;
         }[];
-        stats: import("../shared").AttendanceStats;
-        debt: import("../shared").DebtInfo;
-        createdAt: string;
-    }[]>;
+        archivedCount: number;
+    }>;
     getStudentDetails(teacherId: string, studentId: string): Promise<{
         studentId: string;
         studentUser: {

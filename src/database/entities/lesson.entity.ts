@@ -72,6 +72,10 @@ export class Lesson {
   @Column({ nullable: true })
   meetingUrl: string;
 
+  /** Источник импорта: 'google', 'ics', null (создан вручную) */
+  @Column({ type: "varchar", length: 50, nullable: true, default: null })
+  importSource: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

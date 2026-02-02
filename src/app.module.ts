@@ -14,6 +14,8 @@ import { SharedModule } from "./shared/shared.module";
 import { HealthModule } from "./health/health.module";
 import { BotModule } from "./bot/bot.module";
 import { AdminModule, RequestLoggerMiddleware } from "./admin";
+import { SupportModule } from "./support/support.module";
+import { GoogleCalendarModule } from "./google-calendar";
 import { LoggingMiddleware } from "./shared/logging.middleware";
 import * as entities from "./database/entities";
 
@@ -47,6 +49,10 @@ import * as entities from "./database/entities";
     BotModule,
     // Модуль админ-панели
     AdminModule,
+    // Модуль поддержки
+    SupportModule,
+    // Google Calendar интеграция
+    GoogleCalendarModule,
   ],
 })
 export class AppModule implements NestModule {

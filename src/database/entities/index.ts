@@ -18,3 +18,4 @@ export * from "./subscription.entity";
 export * from "./admin-user.entity";
 export * from "./request-log.entity";
 export * from "./analytics-event.entity";
+export * from "./support-message.entity";

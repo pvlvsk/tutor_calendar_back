@@ -23,11 +23,19 @@ Authorization: Bearer <token>
 ### Auth (/api/auth)
 
 - POST /init - инициализация через Telegram
-- POST /register - регистрация нового пользователя
+- POST /register - регистрация нового пользователя (опционально: `referralSource`)
 - POST /select-role - выбор роли (для мульти-ролевых)
 - POST /add-role - добавление новой роли (требует auth)
-- POST /beta-activate - активация бета
+- POST /activate-beta - активация бета
 - GET /beta-status - статус бета
+- POST /delete-account - мягкое удаление аккаунта (7 дней на восстановление)
+- POST /restore-account - восстановление удалённого аккаунта
+
+**Регистрация с referralSource:**
+```bash
+POST /api/auth/register
+{ "initData": "...", "role": "teacher", "referralSource": "manager_ivan" }
+```
 
 ### Teachers (/api/teachers)
 
@@ -160,6 +168,26 @@ X-Admin-Secret: <BOT_TOKEN или BETA_CODE>
 }
 ```
 
+### Support (/api/support)
+
+Обратная связь и сообщения в поддержку.
+
+- POST / — отправить сообщение в поддержку (требует auth)
+- GET /my — получить свои сообщения (требует auth)
+
+**Создание сообщения:**
+```bash
+POST /api/support
+Authorization: Bearer <token>
+{
+  "subject": "Предложение по улучшению",
+  "message": "Было бы здорово добавить..."
+}
+
+# Ответ:
+{ "success": true, "message": "Сообщение отправлено", "id": "uuid" }
+```
+
 ### Health (/api/health)
 
 - GET / - проверка состояния
@@ -170,7 +198,7 @@ PostgreSQL через TypeORM.
 
 Entities:
 
-- User
+- User — пользователь (с полями `referralSource`, `deletedAt` для soft delete)
 - TeacherProfile
 - StudentProfile
 - ParentProfile
@@ -182,6 +210,11 @@ Entities:
 - Invitation
 - TeacherStudentLink
 - ParentStudentRelation
+- UserNotificationSettings — настройки уведомлений пользователя
+- SupportMessage — сообщения в поддержку
+- AdminUser — администраторы
+- RequestLog — логи запросов
+- AnalyticsEvent — аналитические события
 
 ### User: Поля уведомлений
 

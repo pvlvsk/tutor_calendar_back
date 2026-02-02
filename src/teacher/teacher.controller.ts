@@ -26,6 +26,7 @@ import {
   CalendarImportDto,
   CalendarPreviewResponseDto,
   ImportResultResponseDto,
+  GoogleCalendarImportDto,
 } from "./calendar-import.dto";
 
 @ApiTags("teachers")
@@ -561,6 +562,43 @@ export class TeacherController {
       req.user.profileId,
       body.events,
       { url: body.url, content: body.content }
+    );
+  }
+
+  // ============================================
+  // Google Calendar Import
+  // ============================================
+
+  @Get("me/calendar/google/preview")
+  @ApiOperation({
+    summary: "Получить превью событий из Google Calendar",
+    description:
+      "Загружает события из подключённого Google Calendar для предпросмотра (за ближайшие 3 месяца)",
+  })
+  async getGoogleCalendarPreview(
+    @Request() req: any
+  ): Promise<CalendarPreviewResponseDto> {
+    return this.calendarImportService.getGoogleImportPreview(
+      req.user.sub,
+      req.user.profileId
+    );
+  }
+
+  @Post("me/calendar/google/import")
+  @ApiOperation({
+    summary: "Импортировать события из Google Calendar как уроки",
+    description:
+      "Создаёт уроки на основе выбранных событий из Google Calendar",
+  })
+  @ApiBody({ type: GoogleCalendarImportDto })
+  async importGoogleCalendar(
+    @Request() req: any,
+    @Body() body: GoogleCalendarImportDto
+  ): Promise<ImportResultResponseDto> {
+    return this.calendarImportService.importGoogleEvents(
+      req.user.sub,
+      req.user.profileId,
+      body.events
     );
   }
 }

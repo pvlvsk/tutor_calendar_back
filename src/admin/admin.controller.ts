@@ -2,13 +2,17 @@ import {
   Controller,
   Post,
   Get,
+  Patch,
   Body,
   Query,
+  Param,
   UseGuards,
   Req,
 } from "@nestjs/common";
 import { AdminService } from "./admin.service";
 import { AdminAuthGuard } from "./admin-auth.guard";
+import { SupportService } from "../support/support.service";
+import { UpdateSupportMessageDto } from "../support/support.dto";
 import {
   LoginDto,
   DateRangeDto,
@@ -16,10 +20,14 @@ import {
   AnalyticsEventsQueryDto,
   TrackEventDto,
 } from "./dto";
+import { SupportMessageStatus } from "../database/entities/support-message.entity";
 
 @Controller("admin")
 export class AdminController {
-  constructor(private adminService: AdminService) {}
+  constructor(
+    private adminService: AdminService,
+    private supportService: SupportService
+  ) {}
 
   /**
    * Авторизация администратора.
@@ -149,13 +157,24 @@ export class AdminController {
   async getRequestsChart(
     @Query("from") from: string,
     @Query("to") to: string,
-    @Query("interval") interval?: "minute" | "hour" | "day"
+    @Query("interval") interval?: "minute" | "hour" | "day",
+    @Query("user") userSearch?: string
   ) {
     return this.adminService.getRequestsChartData(
       new Date(from),
       new Date(to),
-      interval || "hour"
+      interval || "hour",
+      userSearch
     );
+  }
+
+  /**
+   * Статистика по источникам регистрации (referral sources).
+   */
+  @Get("referrals")
+  @UseGuards(AdminAuthGuard)
+  async getReferralStats() {
+    return this.adminService.getReferralStats();
   }
 
   /**
@@ -218,5 +237,46 @@ export class AdminController {
     });
 
     return { success: true };
+  }
+
+  // ==================== SUPPORT ====================
+
+  /**
+   * Получить все сообщения в поддержку.
+   */
+  @Get("support")
+  @UseGuards(AdminAuthGuard)
+  async getSupportMessages(
+    @Query("page") page?: string,
+    @Query("limit") limit?: string,
+    @Query("status") status?: SupportMessageStatus
+  ) {
+    return this.supportService.getAllMessages(
+      parseInt(page || "1"),
+      parseInt(limit || "50"),
+      status
+    );
+  }
+
+  /**
+   * Получить количество новых сообщений (для бейджа).
+   */
+  @Get("support/count")
+  @UseGuards(AdminAuthGuard)
+  async getNewSupportMessagesCount() {
+    const count = await this.supportService.getNewMessagesCount();
+    return { count };
+  }
+
+  /**
+   * Обновить статус/заметки сообщения.
+   */
+  @Patch("support/:id")
+  @UseGuards(AdminAuthGuard)
+  async updateSupportMessage(
+    @Param("id") id: string,
+    @Body() dto: UpdateSupportMessageDto
+  ) {
+    return this.supportService.updateMessage(id, dto);
   }
 }

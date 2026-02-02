@@ -78,6 +78,14 @@ export class CalendarImportDto {
   events: ImportEventDto[];
 }
 
+export class GoogleCalendarImportDto {
+  @ApiProperty({ description: "События для импорта из Google Calendar", type: [ImportEventDto] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ImportEventDto)
+  events: ImportEventDto[];
+}
+
 // Response DTOs
 
 export class PreviewEventResponseDto {

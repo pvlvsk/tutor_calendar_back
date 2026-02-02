@@ -24,6 +24,9 @@ interface TestMessageDto {
     text: string;
     buttonText?: string;
 }
+interface SetWebhookDto {
+    url: string;
+}
 export declare class BotController {
     private readonly botService;
     constructor(botService: BotService);
@@ -41,6 +44,20 @@ export declare class BotController {
         success: boolean;
         telegramId: string | number;
         message: string;
+    }>;
+    handleWebhook(update: unknown): Promise<{
+        ok: boolean;
+    }>;
+    setWebhook(adminSecret: string, dto: SetWebhookDto): Promise<{
+        success: boolean;
+        url: string;
+        message: string;
+    }>;
+    getWebhookInfo(adminSecret: string): Promise<{
+        info: unknown;
+    }>;
+    deleteWebhook(adminSecret: string): Promise<{
+        success: boolean;
     }>;
 }
 export {};

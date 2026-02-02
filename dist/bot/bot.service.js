@@ -278,6 +278,115 @@ let BotService = BotService_1 = class BotService {
             return this.sendMessage(telegramId, text);
         }
     }
+    async handleWebhook(update) {
+        if (!update.message?.text) {
+            return;
+        }
+        const { message } = update;
+        const chatId = message.chat.id;
+        const text = message.text;
+        const firstName = message.from.first_name;
+        if (text.startsWith("/start")) {
+            await this.handleStartCommand(chatId, firstName);
+        }
+    }
+    async handleStartCommand(chatId, firstName) {
+        const botUsername = process.env.BOT_USERNAME || "your_bot";
+        const webAppUrl = process.env.WEBAPP_URL;
+        this.logger.log(`WEBAPP_URL from env: ${webAppUrl}`);
+        const welcomeText = `👋 <b>Привет, ${firstName}!</b>\n\n` +
+            `Добро пожаловать в <b>Teach</b> — приложение для управления репетиторством.\n\n` +
+            `🎓 <b>Для репетиторов:</b>\n` +
+            `• Удобное расписание\n` +
+            `• Управление учениками\n` +
+            `• Отслеживание оплат\n\n` +
+            `📚 <b>Для учеников:</b>\n` +
+            `• Расписание занятий\n` +
+            `• Напоминания о уроках\n\n` +
+            `Нажмите кнопку ниже, чтобы начать:`;
+        const keyboard = webAppUrl
+            ? {
+                inline_keyboard: [
+                    [
+                        {
+                            text: "🚀 Открыть приложение",
+                            web_app: { url: webAppUrl },
+                        },
+                    ],
+                ],
+            }
+            : {
+                inline_keyboard: [
+                    [
+                        {
+                            text: "🚀 Открыть приложение",
+                            url: `https://t.me/${botUsername}/app`,
+                        },
+                    ],
+                ],
+            };
+        await this.sendMessage(chatId, welcomeText, {
+            replyMarkup: keyboard,
+        });
+        this.logger.log(`Start command handled for chat ${chatId}`);
+    }
+    async setWebhook(webhookUrl) {
+        if (!this.isConfigured()) {
+            this.logger.warn("Bot token not configured, cannot set webhook");
+            return false;
+        }
+        try {
+            const response = await fetch(`${this.apiUrl}/setWebhook`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    url: webhookUrl,
+                    allowed_updates: ["message"],
+                }),
+            });
+            const data = await response.json();
+            if (!data.ok) {
+                this.logger.error(`Failed to set webhook: ${data.description}`);
+                return false;
+            }
+            this.logger.log(`Webhook set to: ${webhookUrl}`);
+            return true;
+        }
+        catch (error) {
+            this.logger.error(`Error setting webhook: ${error.message}`);
+            return false;
+        }
+    }
+    async deleteWebhook() {
+        if (!this.isConfigured()) {
+            return false;
+        }
+        try {
+            const response = await fetch(`${this.apiUrl}/deleteWebhook`, {
+                method: "POST",
+            });
+            const data = await response.json();
+            return data.ok;
+        }
+        catch (error) {
+            this.logger.error(`Error deleting webhook: ${error.message}`);
+            return false;
+        }
+    }
+    async getWebhookInfo() {
+        if (!this.isConfigured()) {
+            return null;
+        }
+        try {
+            const response = await fetch(`${this.apiUrl}/getWebhookInfo`);
+            const data = await response.json();
+            return data.result;
+        }
+        catch (error) {
+            this.logger.error(`Error getting webhook info: ${error.message}`);
+            return null;
+        }
+    }
 };
 exports.BotService = BotService;
 __decorate([

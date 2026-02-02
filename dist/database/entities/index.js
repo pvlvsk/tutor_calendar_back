@@ -32,4 +32,5 @@ __exportStar(require("./subscription.entity"), exports);
 __exportStar(require("./admin-user.entity"), exports);
 __exportStar(require("./request-log.entity"), exports);
 __exportStar(require("./analytics-event.entity"), exports);
+__exportStar(require("./support-message.entity"), exports);
 //# sourceMappingURL=index.js.map

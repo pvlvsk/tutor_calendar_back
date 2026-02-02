@@ -217,7 +217,7 @@ export class AuthService {
   /**
    * Регистрация нового пользователя с выбранной ролью
    */
-  async register(initData: string, role: UserRole) {
+  async register(initData: string, role: UserRole, referralSource?: string) {
     const telegramUser = this.telegramService.validateInitData(initData);
     if (!telegramUser) {
       this.logger.warn(`Register failed: invalid initData`);
@@ -238,6 +238,7 @@ export class AuthService {
       firstName: telegramUser.first_name,
       lastName: telegramUser.last_name,
       username: telegramUser.username,
+      referralSource: referralSource || null,
     });
     await this.userRepository.save(user);
 
@@ -246,7 +247,8 @@ export class AuthService {
     const token = this.generateToken(userWithProfile, role);
 
     this.logger.log(
-      `Register: tg=${telegramUser.id} role=${role} userId=${user.id}`
+      `Register: tg=${telegramUser.id} role=${role} userId=${user.id}` +
+        (referralSource ? ` referral=${referralSource}` : "")
     );
 
     // Отправляем приветственное уведомление

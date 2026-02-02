@@ -55,23 +55,26 @@ export declare class TeacherController {
         success: boolean;
     }>;
     getStudents(req: any): Promise<{
-        studentId: string;
-        studentUser: {
-            id: any;
-            firstName: any;
-            lastName: any;
-            username: any;
-        };
-        customFields: Record<string, string>;
-        subjects: {
-            subjectId: string;
-            name: string;
-            colorHex: string;
+        students: {
+            studentId: string;
+            studentUser: {
+                id: any;
+                firstName: any;
+                lastName: any;
+                username: any;
+            };
+            customFields: Record<string, string>;
+            subjects: {
+                subjectId: string;
+                name: string;
+                colorHex: string;
+            }[];
+            stats: import("../shared").AttendanceStats;
+            debt: import("../shared").DebtInfo;
+            createdAt: string;
         }[];
-        stats: import("../shared").AttendanceStats;
-        debt: import("../shared").DebtInfo;
-        createdAt: string;
-    }[]>;
+        archivedCount: number;
+    }>;
     createStudentInvitation(req: any): Promise<{
         invitationId: string;
         token: string;

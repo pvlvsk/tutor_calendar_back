@@ -38,6 +38,20 @@ export class User {
   @Column({ default: false })
   isBetaTester: boolean;
 
+  /** Источник регистрации (реферальная метка) */
+  @Column({ type: "varchar", length: 100, nullable: true })
+  referralSource: string | null;
+
+  // Google Calendar OAuth
+  @Column({ type: "text", nullable: true })
+  googleRefreshToken: string | null;
+
+  @Column({ default: false })
+  googleCalendarConnected: boolean;
+
+  @Column({ type: "varchar", nullable: true })
+  googleEmail: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

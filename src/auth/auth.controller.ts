@@ -18,7 +18,7 @@ export class AuthController {
   @Post('register')
   @ApiOperation({ summary: 'Регистрация нового пользователя' })
   register(@Body() dto: RegisterDto) {
-    return this.authService.register(dto.initData, dto.role)
+    return this.authService.register(dto.initData, dto.role, dto.referralSource)
   }
 
   @Post('select-role')

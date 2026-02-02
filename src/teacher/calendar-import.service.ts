@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from "@nestjs/common";
+import { Injectable, BadRequestException, Inject, forwardRef } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, In } from "typeorm";
 import * as ical from "node-ical";
@@ -9,7 +9,9 @@ import {
   TeacherStudentLink,
   LessonSeries,
   LessonSeriesStudent,
+  User,
 } from "../database/entities";
+import { GoogleCalendarService } from "../google-calendar/google-calendar.service";
 
 export interface IcsEvent {
   uid: string;
@@ -57,7 +59,11 @@ export class CalendarImportService {
     @InjectRepository(LessonSeries)
     private seriesRepo: Repository<LessonSeries>,
     @InjectRepository(LessonSeriesStudent)
-    private seriesStudentRepo: Repository<LessonSeriesStudent>
+    private seriesStudentRepo: Repository<LessonSeriesStudent>,
+    @InjectRepository(User)
+    private userRepo: Repository<User>,
+    @Inject(forwardRef(() => GoogleCalendarService))
+    private googleCalendarService: GoogleCalendarService
   ) {}
 
   /**
@@ -623,5 +629,324 @@ export class CalendarImportService {
     }
 
     return null;
+  }
+
+  // ============================================
+  // Google Calendar Import
+  // ============================================
+
+  /**
+   * Получает превью событий из Google Calendar
+   */
+  async getGoogleImportPreview(
+    userId: string,
+    teacherId: string
+  ): Promise<{
+    events: ImportPreviewEvent[];
+    subjects: { id: string; name: string }[];
+    totalEvents: number;
+    hasRecurringEvents: boolean;
+  }> {
+    // Диапазон: от сегодня до 3 месяцев вперёд
+    const fromDate = new Date();
+    const toDate = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+
+    // Получаем события из Google Calendar
+    const googleEvents = await this.googleCalendarService.getEvents(
+      userId,
+      fromDate,
+      toDate
+    );
+
+    // Получаем предметы учителя для предложений
+    const subjects = await this.subjectRepo.find({
+      where: { teacherId },
+      select: ["id", "name"],
+    });
+
+    // Проверяем, есть ли повторяющиеся события
+    const hasRecurringEvents = googleEvents.some((e) => !!e.recurringEventId);
+
+    // Маппим события в формат ImportPreviewEvent
+    const events: ImportPreviewEvent[] = googleEvents.map((event, index) => {
+      const start = new Date(event.start);
+      const end = new Date(event.end);
+      const durationMinutes = Math.round((end.getTime() - start.getTime()) / (1000 * 60));
+
+      // Пытаемся найти подходящий предмет
+      const matchedSubject = this.findMatchingSubject(event.summary, subjects);
+
+      return {
+        uid: event.id || `google_${index}_${start.getTime()}`,
+        title: event.summary,
+        description: event.description,
+        startAt: start,
+        endAt: end,
+        durationMinutes,
+        location: event.location,
+        suggestedSubjectId: matchedSubject?.id,
+        suggestedSubjectName: matchedSubject?.name,
+        isRecurring: !!event.recurringEventId,
+        originalUid: event.recurringEventId, // ID родительского повторяющегося события
+      };
+    });
+
+    return {
+      events,
+      subjects: subjects.map((s) => ({ id: s.id, name: s.name })),
+      totalEvents: events.length,
+      hasRecurringEvents,
+    };
+  }
+
+  /**
+   * Импортирует события из Google Calendar как уроки
+   * Группирует повторяющиеся события (с одинаковым recurringEventId) в серии
+   */
+  async importGoogleEvents(
+    userId: string,
+    teacherId: string,
+    eventsToImport: {
+      uid: string;
+      subjectId?: string | null;
+      autoCreateSubject?: boolean;
+      studentIds?: string[];
+      priceRub?: number;
+    }[]
+  ): Promise<ImportResult> {
+    // Получаем события из Google Calendar
+    const fromDate = new Date();
+    const toDate = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+    const googleEvents = await this.googleCalendarService.getEvents(userId, fromDate, toDate);
+    
+    // Создаём карту событий по uid
+    const eventsMap = new Map<string, typeof googleEvents[0]>();
+    googleEvents.forEach((event, index) => {
+      const uid = event.id || `google_${index}_${new Date(event.start).getTime()}`;
+      eventsMap.set(uid, event);
+    });
+
+    // Валидируем предметы
+    const subjectIds = [
+      ...new Set(eventsToImport.map((e) => e.subjectId).filter(Boolean)),
+    ] as string[];
+    const existingSubjects =
+      subjectIds.length > 0
+        ? await this.subjectRepo.find({
+            where: { id: In(subjectIds), teacherId },
+          })
+        : [];
+    const validSubjectIds = new Set(existingSubjects.map((s) => s.id));
+
+    // Получаем все предметы учителя для автосоздания
+    const allTeacherSubjects = await this.subjectRepo.find({
+      where: { teacherId },
+      select: ["id", "name"],
+    });
+    const subjectsByName = new Map(
+      allTeacherSubjects.map((s) => [s.name.toLowerCase(), s])
+    );
+    const autoCreatedSubjects = new Map<string, string>();
+
+    // Получаем учеников учителя
+    const studentLinks = await this.linkRepo.find({
+      where: { teacherId },
+      select: ["studentId"],
+    });
+    const validStudentIds = new Set(studentLinks.map((l) => l.studentId));
+
+    const result: ImportResult = {
+      imported: 0,
+      skipped: 0,
+      errors: [],
+      seriesCreated: 0,
+    };
+
+    const generateColor = () => {
+      const colors = [
+        "#2563EB", "#7C3AED", "#DB2777", "#DC2626", 
+        "#EA580C", "#CA8A04", "#16A34A", "#0891B2"
+      ];
+      return colors[Math.floor(Math.random() * colors.length)];
+    };
+
+    // Вспомогательная функция для определения subjectId
+    const resolveSubjectId = async (
+      eventData: typeof eventsToImport[0],
+      eventSummary: string
+    ): Promise<string | null> => {
+      let subjectId: string | null = eventData.subjectId || null;
+
+      if (!subjectId && eventData.autoCreateSubject && eventSummary) {
+        const titleLower = eventSummary.toLowerCase();
+        
+        if (autoCreatedSubjects.has(titleLower)) {
+          subjectId = autoCreatedSubjects.get(titleLower)!;
+        } else if (subjectsByName.has(titleLower)) {
+          subjectId = subjectsByName.get(titleLower)!.id;
+          autoCreatedSubjects.set(titleLower, subjectId);
+        } else {
+          const code = eventSummary
+            .substring(0, 3)
+            .toUpperCase()
+            .replace(/[^A-ZА-Я0-9]/gi, "") || "IMP";
+          
+          const newSubject = await this.subjectRepo.save(
+            this.subjectRepo.create({
+              teacherId,
+              name: eventSummary,
+              code,
+              colorHex: generateColor(),
+            })
+          );
+          subjectId = newSubject.id;
+          autoCreatedSubjects.set(titleLower, subjectId);
+          subjectsByName.set(titleLower, newSubject);
+          console.log(`[GoogleImport] Создан предмет "${eventSummary}" (${subjectId})`);
+        }
+      }
+
+      if (eventData.subjectId && !validSubjectIds.has(eventData.subjectId)) {
+        return null;
+      }
+
+      return subjectId;
+    };
+
+    // Группируем события по recurringEventId (для повторяющихся) или как одиночные
+    const eventsByRecurringId = new Map<string, {
+      eventData: typeof eventsToImport[0];
+      googleEvent: typeof googleEvents[0];
+    }[]>();
+
+    for (const eventData of eventsToImport) {
+      const googleEvent = eventsMap.get(eventData.uid);
+      if (!googleEvent) {
+        result.errors.push(`Событие ${eventData.uid} не найдено`);
+        result.skipped++;
+        continue;
+      }
+
+      // Группируем по recurringEventId для повторяющихся, или по uid для одиночных
+      const groupKey = googleEvent.recurringEventId || googleEvent.id || eventData.uid;
+
+      if (!eventsByRecurringId.has(groupKey)) {
+        eventsByRecurringId.set(groupKey, []);
+      }
+      eventsByRecurringId.get(groupKey)!.push({ eventData, googleEvent });
+    }
+
+    console.log(`[GoogleImport] Найдено ${eventsByRecurringId.size} групп событий`);
+
+    // Обрабатываем каждую группу
+    for (const [groupKey, group] of eventsByRecurringId) {
+      const firstEvent = group[0];
+      const isRecurringSeries = group.length > 1 || !!firstEvent.googleEvent.recurringEventId;
+
+      const subjectId = await resolveSubjectId(firstEvent.eventData, firstEvent.googleEvent.summary);
+      if (subjectId === null && firstEvent.eventData.subjectId) {
+        result.errors.push(`Предмет не найден для "${firstEvent.googleEvent.summary}"`);
+        result.skipped += group.length;
+        continue;
+      }
+
+      const start = new Date(firstEvent.googleEvent.start);
+      const end = new Date(firstEvent.googleEvent.end);
+      const durationMinutes = Math.round((end.getTime() - start.getTime()) / (1000 * 60));
+      const priceRub = firstEvent.eventData.priceRub ?? 0;
+      const studentIds = (firstEvent.eventData.studentIds || []).filter((id) =>
+        validStudentIds.has(id)
+      );
+      const meetingUrl = firstEvent.googleEvent.location?.startsWith("http")
+        ? firstEvent.googleEvent.location
+        : undefined;
+      const description = firstEvent.googleEvent.description || undefined;
+
+      // Сортируем группу по дате
+      group.sort((a, b) => 
+        new Date(a.googleEvent.start).getTime() - new Date(b.googleEvent.start).getTime()
+      );
+
+      let seriesId: string | undefined;
+
+      // Создаём серию для повторяющихся событий с несколькими вхождениями
+      if (isRecurringSeries && group.length > 1) {
+        const firstStart = new Date(group[0].googleEvent.start);
+        const lastStart = new Date(group[group.length - 1].googleEvent.start);
+        const dayOfWeek = firstStart.getDay();
+        const timeOfDay = firstStart.toTimeString().slice(0, 5);
+
+        const series = this.seriesRepo.create({
+          teacherId,
+          subjectId,
+          frequency: "weekly", // Предполагаем еженедельное повторение
+          dayOfWeek,
+          timeOfDay,
+          durationMinutes,
+          priceRub,
+          isFree: priceRub === 0,
+          meetingUrl,
+          maxOccurrences: group.length,
+          endDate: lastStart,
+        });
+        const savedSeries = await this.seriesRepo.save(series);
+        seriesId = savedSeries.id;
+
+        // Добавляем учеников в серию
+        for (const studentId of studentIds) {
+          await this.seriesStudentRepo.save(
+            this.seriesStudentRepo.create({
+              seriesId: savedSeries.id,
+              studentId,
+              priceRub,
+            })
+          );
+        }
+
+        result.seriesCreated++;
+        console.log(`[GoogleImport] Создана серия "${firstEvent.googleEvent.summary}" с ${group.length} уроками`);
+      }
+
+      // Создаём уроки
+      for (const { googleEvent } of group) {
+        const lessonStart = new Date(googleEvent.start);
+        const lessonEnd = new Date(googleEvent.end);
+        const lessonDuration = Math.round((lessonEnd.getTime() - lessonStart.getTime()) / (1000 * 60));
+
+        const lessonData: Partial<Lesson> = {
+          teacherId,
+          subjectId,
+          seriesId,
+          startAt: lessonStart,
+          durationMinutes: lessonDuration,
+          priceRub,
+          status: "planned",
+          teacherNote: googleEvent.description || undefined,
+          meetingUrl: googleEvent.location?.startsWith("http") ? googleEvent.location : undefined,
+          importSource: "google",
+        };
+
+        const savedLesson = await this.lessonRepo.save(
+          this.lessonRepo.create(lessonData)
+        );
+
+        // Добавляем учеников к уроку
+        for (const studentId of studentIds) {
+          await this.lessonStudentRepo.save(
+            this.lessonStudentRepo.create({
+              lessonId: savedLesson.id,
+              studentId,
+              priceRub,
+              paymentStatus: "unpaid",
+              paymentType: priceRub ? "fixed" : "free",
+            })
+          );
+        }
+
+        result.imported++;
+      }
+    }
+
+    return result;
   }
 }

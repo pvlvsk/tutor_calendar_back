@@ -51,6 +51,22 @@ __decorate([
     __metadata("design:type", Boolean)
 ], User.prototype, "isBetaTester", void 0);
 __decorate([
+    (0, typeorm_1.Column)({ type: "varchar", length: 100, nullable: true }),
+    __metadata("design:type", Object)
+], User.prototype, "referralSource", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: "text", nullable: true }),
+    __metadata("design:type", Object)
+], User.prototype, "googleRefreshToken", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ default: false }),
+    __metadata("design:type", Boolean)
+], User.prototype, "googleCalendarConnected", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: "varchar", nullable: true }),
+    __metadata("design:type", Object)
+], User.prototype, "googleEmail", void 0);
+__decorate([
     (0, typeorm_1.CreateDateColumn)(),
     __metadata("design:type", Date)
 ], User.prototype, "createdAt", void 0);
@@ -58,6 +74,10 @@ __decorate([
     (0, typeorm_1.UpdateDateColumn)(),
     __metadata("design:type", Date)
 ], User.prototype, "updatedAt", void 0);
+__decorate([
+    (0, typeorm_1.DeleteDateColumn)({ nullable: true }),
+    __metadata("design:type", Object)
+], User.prototype, "deletedAt", void 0);
 __decorate([
     (0, typeorm_1.OneToOne)(() => teacher_profile_entity_1.TeacherProfile, (profile) => profile.user),
     __metadata("design:type", teacher_profile_entity_1.TeacherProfile)

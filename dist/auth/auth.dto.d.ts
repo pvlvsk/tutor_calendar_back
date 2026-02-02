@@ -4,6 +4,7 @@ export declare class InitDto {
 export declare class RegisterDto {
     initData: string;
     role: 'teacher' | 'student' | 'parent';
+    referralSource?: string;
 }
 export declare class SelectRoleDto {
     initData: string;

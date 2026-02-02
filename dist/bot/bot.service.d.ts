@@ -6,6 +6,30 @@ interface SendMessageOptions {
     disableNotification?: boolean;
     replyMarkup?: object;
 }
+interface TelegramUpdate {
+    update_id: number;
+    message?: {
+        message_id: number;
+        from: {
+            id: number;
+            is_bot: boolean;
+            first_name: string;
+            last_name?: string;
+            username?: string;
+        };
+        chat: {
+            id: number;
+            type: string;
+        };
+        date: number;
+        text?: string;
+        entities?: Array<{
+            type: string;
+            offset: number;
+            length: number;
+        }>;
+    };
+}
 export declare class BotService {
     private readonly userRepo;
     private readonly settingsRepo;
@@ -36,5 +60,10 @@ export declare class BotService {
     notifyUserWelcome(telegramId: string | number, role: 'teacher' | 'student' | 'parent', teacherName?: string): Promise<boolean>;
     notifyTeacherNewStudent(teacherTelegramId: string | number, studentName: string): Promise<boolean>;
     testSendMessage(telegramId: string | number, text: string, buttonText?: string): Promise<boolean>;
+    handleWebhook(update: TelegramUpdate): Promise<void>;
+    private handleStartCommand;
+    setWebhook(webhookUrl: string): Promise<boolean>;
+    deleteWebhook(): Promise<boolean>;
+    getWebhookInfo(): Promise<unknown>;
 }
 export {};

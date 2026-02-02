@@ -43,6 +43,15 @@ __decorate([
     (0, class_validator_1.IsIn)(['teacher', 'student', 'parent']),
     __metadata("design:type", String)
 ], RegisterDto.prototype, "role", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({
+        description: 'Источник регистрации (реферальная метка, например: manager_username, VKTARGET, instagram)',
+        example: 'manager_ivanov'
+    }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], RegisterDto.prototype, "referralSource", void 0);
 class SelectRoleDto {
 }
 exports.SelectRoleDto = SelectRoleDto;

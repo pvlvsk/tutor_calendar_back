@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { JwtModule } from "@nestjs/jwt";
 import { AdminController } from "./admin.controller";
@@ -11,7 +11,9 @@ import {
   User,
   TeacherProfile,
   StudentProfile,
+  SupportMessage,
 } from "../database/entities";
+import { SupportModule } from "../support/support.module";
 
 @Module({
   imports: [
@@ -22,11 +24,13 @@ import {
       User,
       TeacherProfile,
       StudentProfile,
+      SupportMessage,
     ]),
     JwtModule.register({
       secret: process.env.ADMIN_JWT_SECRET || "admin-secret-key-change-me",
       signOptions: { expiresIn: "24h" },
     }),
+    forwardRef(() => SupportModule),
   ],
   controllers: [AdminController],
   providers: [AdminService, AdminAuthGuard],

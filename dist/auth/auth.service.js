@@ -27,7 +27,7 @@ function generateReferralCode(prefix) {
     return `${prefix}_${(0, nanoid_1.nanoid)(12)}`;
 }
 let AuthService = AuthService_1 = class AuthService {
-    constructor(userRepository, teacherProfileRepository, studentProfileRepository, parentProfileRepository, invitationRepository, teacherStudentLinkRepository, parentStudentRelationRepository, jwtService, telegramService, botService) {
+    constructor(userRepository, teacherProfileRepository, studentProfileRepository, parentProfileRepository, invitationRepository, teacherStudentLinkRepository, parentStudentRelationRepository, lessonRepository, lessonSeriesRepository, subjectRepository, subscriptionRepository, notificationSettingsRepository, analyticsEventRepository, lessonStudentRepository, lessonSeriesStudentRepository, jwtService, telegramService, botService) {
         this.userRepository = userRepository;
         this.teacherProfileRepository = teacherProfileRepository;
         this.studentProfileRepository = studentProfileRepository;
@@ -35,10 +35,19 @@ let AuthService = AuthService_1 = class AuthService {
         this.invitationRepository = invitationRepository;
         this.teacherStudentLinkRepository = teacherStudentLinkRepository;
         this.parentStudentRelationRepository = parentStudentRelationRepository;
+        this.lessonRepository = lessonRepository;
+        this.lessonSeriesRepository = lessonSeriesRepository;
+        this.subjectRepository = subjectRepository;
+        this.subscriptionRepository = subscriptionRepository;
+        this.notificationSettingsRepository = notificationSettingsRepository;
+        this.analyticsEventRepository = analyticsEventRepository;
+        this.lessonStudentRepository = lessonStudentRepository;
+        this.lessonSeriesStudentRepository = lessonSeriesStudentRepository;
         this.jwtService = jwtService;
         this.telegramService = telegramService;
         this.botService = botService;
         this.logger = new common_1.Logger(AuthService_1.name);
+        this.ACCOUNT_RESTORE_DAYS = 7;
     }
     async init(initData) {
         const telegramUser = this.telegramService.validateInitData(initData);
@@ -47,10 +56,14 @@ let AuthService = AuthService_1 = class AuthService {
             throw new common_1.UnauthorizedException("INVALID_INIT_DATA");
         }
         this.logger.log(`Init: tg=${telegramUser.id} @${telegramUser.username || "no_username"}`);
-        const user = await this.userRepository.findOne({
-            where: { telegramId: String(telegramUser.id) },
-            relations: ["teacherProfile", "studentProfile", "parentProfile"],
-        });
+        const user = await this.userRepository
+            .createQueryBuilder("user")
+            .withDeleted()
+            .leftJoinAndSelect("user.teacherProfile", "teacherProfile")
+            .leftJoinAndSelect("user.studentProfile", "studentProfile")
+            .leftJoinAndSelect("user.parentProfile", "parentProfile")
+            .where("user.telegramId = :telegramId", { telegramId: String(telegramUser.id) })
+            .getOne();
         if (!user) {
             this.logger.log(`Init: new user tg=${telegramUser.id}`);
             return {
@@ -62,6 +75,41 @@ let AuthService = AuthService_1 = class AuthService {
                     username: telegramUser.username,
                 },
             };
+        }
+        if (user.deletedAt) {
+            const deletedDate = new Date(user.deletedAt);
+            const now = new Date();
+            const daysSinceDelete = Math.floor((now.getTime() - deletedDate.getTime()) / (1000 * 60 * 60 * 24));
+            if (daysSinceDelete < this.ACCOUNT_RESTORE_DAYS) {
+                const daysLeft = this.ACCOUNT_RESTORE_DAYS - daysSinceDelete;
+                this.logger.log(`Init: deleted user tg=${telegramUser.id}, can restore, ${daysLeft} days left`);
+                return {
+                    isNewUser: false,
+                    isDeleted: true,
+                    canRestore: true,
+                    daysLeft,
+                    deletedAt: user.deletedAt.toISOString(),
+                    telegramUser: {
+                        id: telegramUser.id,
+                        firstName: telegramUser.first_name,
+                        lastName: telegramUser.last_name,
+                        username: telegramUser.username,
+                    },
+                };
+            }
+            else {
+                this.logger.log(`Init: deleted user tg=${telegramUser.id}, restore period expired, purging data`);
+                await this.purgeDeletedUser(user);
+                return {
+                    isNewUser: true,
+                    telegramUser: {
+                        id: telegramUser.id,
+                        firstName: telegramUser.first_name,
+                        lastName: telegramUser.last_name,
+                        username: telegramUser.username,
+                    },
+                };
+            }
         }
         const roles = this.getUserRoles(user);
         this.logger.log(`Init: existing user tg=${telegramUser.id} roles=${roles.join(",")}`);
@@ -83,7 +131,7 @@ let AuthService = AuthService_1 = class AuthService {
             token: null,
         };
     }
-    async register(initData, role) {
+    async register(initData, role, referralSource) {
         const telegramUser = this.telegramService.validateInitData(initData);
         if (!telegramUser) {
             this.logger.warn(`Register failed: invalid initData`);
@@ -101,12 +149,14 @@ let AuthService = AuthService_1 = class AuthService {
             firstName: telegramUser.first_name,
             lastName: telegramUser.last_name,
             username: telegramUser.username,
+            referralSource: referralSource || null,
         });
         await this.userRepository.save(user);
         const profile = await this.createProfile(user.id, role, telegramUser);
         const userWithProfile = { ...user, [`${role}Profile`]: profile };
         const token = this.generateToken(userWithProfile, role);
-        this.logger.log(`Register: tg=${telegramUser.id} role=${role} userId=${user.id}`);
+        this.logger.log(`Register: tg=${telegramUser.id} role=${role} userId=${user.id}` +
+            (referralSource ? ` referral=${referralSource}` : ""));
         this.botService.notifyUserWelcome(telegramUser.id, role).catch((err) => {
             this.logger.warn(`Failed to send welcome notification: ${err.message}`);
         });
@@ -600,6 +650,121 @@ let AuthService = AuthService_1 = class AuthService {
         }
         return { id: profile.id };
     }
+    async deleteAccount(userId) {
+        const user = await this.userRepository.findOne({
+            where: { id: userId },
+        });
+        if (!user) {
+            throw new common_1.NotFoundException("USER_NOT_FOUND");
+        }
+        this.logger.log(`DeleteAccount: soft delete for userId=${userId}`);
+        user.deletedAt = new Date();
+        await this.userRepository.save(user);
+        this.logger.log(`DeleteAccount: completed for userId=${userId}`);
+        return {
+            success: true,
+            message: "Аккаунт помечен для удаления",
+            deletedAt: user.deletedAt.toISOString(),
+            restoreDays: this.ACCOUNT_RESTORE_DAYS,
+        };
+    }
+    async restoreAccount(initData) {
+        const telegramUser = this.telegramService.validateInitData(initData);
+        if (!telegramUser) {
+            throw new common_1.UnauthorizedException("INVALID_INIT_DATA");
+        }
+        const user = await this.userRepository
+            .createQueryBuilder("user")
+            .withDeleted()
+            .leftJoinAndSelect("user.teacherProfile", "teacherProfile")
+            .leftJoinAndSelect("user.studentProfile", "studentProfile")
+            .leftJoinAndSelect("user.parentProfile", "parentProfile")
+            .where("user.telegramId = :telegramId", { telegramId: String(telegramUser.id) })
+            .andWhere("user.deletedAt IS NOT NULL")
+            .getOne();
+        if (!user) {
+            throw new common_1.NotFoundException("DELETED_USER_NOT_FOUND");
+        }
+        const deletedDate = new Date(user.deletedAt);
+        const now = new Date();
+        const daysSinceDelete = Math.floor((now.getTime() - deletedDate.getTime()) / (1000 * 60 * 60 * 24));
+        if (daysSinceDelete >= this.ACCOUNT_RESTORE_DAYS) {
+            throw new common_1.GoneException("RESTORE_PERIOD_EXPIRED");
+        }
+        user.deletedAt = null;
+        await this.userRepository.save(user);
+        const roles = this.getUserRoles(user);
+        this.logger.log(`RestoreAccount: restored userId=${user.id} roles=${roles.join(",")}`);
+        if (roles.length === 1) {
+            const token = this.generateToken(user, roles[0]);
+            return {
+                success: true,
+                message: "Аккаунт восстановлен",
+                user: this.formatUser(user),
+                roles,
+                currentRole: roles[0],
+                token,
+            };
+        }
+        return {
+            success: true,
+            message: "Аккаунт восстановлен",
+            user: this.formatUser(user),
+            roles,
+            currentRole: null,
+            token: null,
+        };
+    }
+    async purgeDeletedUser(user) {
+        this.logger.log(`PurgeDeletedUser: starting for userId=${user.id}`);
+        const fullUser = await this.userRepository
+            .createQueryBuilder("user")
+            .withDeleted()
+            .leftJoinAndSelect("user.teacherProfile", "teacherProfile")
+            .leftJoinAndSelect("user.studentProfile", "studentProfile")
+            .leftJoinAndSelect("user.parentProfile", "parentProfile")
+            .where("user.id = :id", { id: user.id })
+            .getOne();
+        if (!fullUser)
+            return;
+        if (fullUser.teacherProfile) {
+            const teacherId = fullUser.teacherProfile.id;
+            this.logger.log(`PurgeDeletedUser: deleting teacher data for teacherId=${teacherId}`);
+            await this.lessonRepository.delete({ teacherId });
+            await this.lessonSeriesRepository.delete({ teacherId });
+            await this.subjectRepository.delete({ teacherId });
+            await this.subscriptionRepository.delete({ teacherId });
+            await this.invitationRepository.delete({ teacherId });
+            await this.teacherStudentLinkRepository.delete({ teacherId });
+            await this.parentStudentRelationRepository.delete({ teacherId });
+            await this.teacherProfileRepository.delete({ id: teacherId });
+        }
+        if (fullUser.studentProfile) {
+            const studentId = fullUser.studentProfile.id;
+            this.logger.log(`PurgeDeletedUser: deleting student data for studentId=${studentId}`);
+            await this.lessonStudentRepository.delete({ studentId });
+            await this.lessonSeriesStudentRepository.delete({ studentId });
+            await this.subscriptionRepository.delete({ studentId });
+            await this.teacherStudentLinkRepository.delete({ studentId });
+            await this.parentStudentRelationRepository.delete({ studentId });
+            await this.studentProfileRepository.delete({ id: studentId });
+        }
+        if (fullUser.parentProfile) {
+            const parentId = fullUser.parentProfile.id;
+            this.logger.log(`PurgeDeletedUser: deleting parent data for parentId=${parentId}`);
+            await this.parentStudentRelationRepository.delete({ parentId });
+            await this.parentProfileRepository.delete({ id: parentId });
+        }
+        await this.notificationSettingsRepository.delete({ userId: fullUser.id });
+        await this.analyticsEventRepository.delete({ userId: fullUser.id });
+        await this.userRepository
+            .createQueryBuilder()
+            .delete()
+            .from(entities_1.User)
+            .where("id = :id", { id: fullUser.id })
+            .execute();
+        this.logger.log(`PurgeDeletedUser: completed for userId=${fullUser.id}`);
+    }
 };
 exports.AuthService = AuthService;
 exports.AuthService = AuthService = AuthService_1 = __decorate([
@@ -611,7 +776,23 @@ exports.AuthService = AuthService = AuthService_1 = __decorate([
     __param(4, (0, typeorm_1.InjectRepository)(entities_1.Invitation)),
     __param(5, (0, typeorm_1.InjectRepository)(entities_1.TeacherStudentLink)),
     __param(6, (0, typeorm_1.InjectRepository)(entities_1.ParentStudentRelation)),
+    __param(7, (0, typeorm_1.InjectRepository)(entities_1.Lesson)),
+    __param(8, (0, typeorm_1.InjectRepository)(entities_1.LessonSeries)),
+    __param(9, (0, typeorm_1.InjectRepository)(entities_1.Subject)),
+    __param(10, (0, typeorm_1.InjectRepository)(entities_1.Subscription)),
+    __param(11, (0, typeorm_1.InjectRepository)(entities_1.UserNotificationSettings)),
+    __param(12, (0, typeorm_1.InjectRepository)(entities_1.AnalyticsEvent)),
+    __param(13, (0, typeorm_1.InjectRepository)(entities_1.LessonStudent)),
+    __param(14, (0, typeorm_1.InjectRepository)(entities_1.LessonSeriesStudent)),
     __metadata("design:paramtypes", [typeorm_2.Repository,
+        typeorm_2.Repository,
+        typeorm_2.Repository,
+        typeorm_2.Repository,
+        typeorm_2.Repository,
+        typeorm_2.Repository,
+        typeorm_2.Repository,
+        typeorm_2.Repository,
+        typeorm_2.Repository,
         typeorm_2.Repository,
         typeorm_2.Repository,
         typeorm_2.Repository,

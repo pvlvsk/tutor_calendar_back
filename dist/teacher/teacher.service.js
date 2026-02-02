@@ -199,6 +199,9 @@ let TeacherService = class TeacherService {
             where: { teacherId, archivedAt: (0, typeorm_2.IsNull)() },
             relations: ["student", "student.user"],
         });
+        const archivedCount = await this.linkRepo.count({
+            where: { teacherId, archivedAt: (0, typeorm_2.Not)((0, typeorm_2.IsNull)()) },
+        });
         const allSubjects = await this.subjectRepo.find({ where: { teacherId } });
         const students = [];
         for (const link of links) {
@@ -229,7 +232,7 @@ let TeacherService = class TeacherService {
                 createdAt: link.createdAt.toISOString(),
             });
         }
-        return students;
+        return { students, archivedCount };
     }
     async getStudentDetails(teacherId, studentId) {
         const link = await this.linkRepo.findOne({

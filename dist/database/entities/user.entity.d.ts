@@ -11,8 +11,13 @@ export declare class User {
     city: string;
     timezone: string;
     isBetaTester: boolean;
+    referralSource: string | null;
+    googleRefreshToken: string | null;
+    googleCalendarConnected: boolean;
+    googleEmail: string | null;
     createdAt: Date;
     updatedAt: Date;
+    deletedAt: Date | null;
     teacherProfile: TeacherProfile;
     studentProfile: StudentProfile;
     parentProfile: ParentProfile;

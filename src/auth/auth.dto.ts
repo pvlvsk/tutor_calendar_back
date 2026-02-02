@@ -25,6 +25,14 @@ export class RegisterDto {
   })
   @IsIn(['teacher', 'student', 'parent'])
   role: 'teacher' | 'student' | 'parent'
+
+  @ApiPropertyOptional({ 
+    description: 'Источник регистрации (реферальная метка, например: manager_username, VKTARGET, instagram)',
+    example: 'manager_ivanov'
+  })
+  @IsOptional()
+  @IsString()
+  referralSource?: string
 }
 
 export class SelectRoleDto {

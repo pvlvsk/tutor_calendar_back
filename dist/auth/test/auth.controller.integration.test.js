@@ -73,7 +73,7 @@ describe('AuthController (HTTP integration)', () => {
                 .expect(201);
             expect(response.body.status).toBe('registered');
             expect(response.body.access_token).toBeDefined();
-            expect(mockAuthService.register).toHaveBeenCalledWith('test', 'teacher');
+            expect(mockAuthService.register).toHaveBeenCalledWith('test', 'teacher', undefined);
         });
         it('должен вернуть 400 при невалидной роли', async () => {
             await request(app.getHttpServer())
@@ -86,14 +86,21 @@ describe('AuthController (HTTP integration)', () => {
                 .post('/auth/register')
                 .send({ initData: 'test', role: 'student' })
                 .expect(201);
-            expect(mockAuthService.register).toHaveBeenCalledWith('test', 'student');
+            expect(mockAuthService.register).toHaveBeenCalledWith('test', 'student', undefined);
         });
         it('должен принять роль parent', async () => {
             await request(app.getHttpServer())
                 .post('/auth/register')
                 .send({ initData: 'test', role: 'parent' })
                 .expect(201);
-            expect(mockAuthService.register).toHaveBeenCalledWith('test', 'parent');
+            expect(mockAuthService.register).toHaveBeenCalledWith('test', 'parent', undefined);
+        });
+        it('должен принять referralSource', async () => {
+            await request(app.getHttpServer())
+                .post('/auth/register')
+                .send({ initData: 'test', role: 'teacher', referralSource: 'manager_ivan' })
+                .expect(201);
+            expect(mockAuthService.register).toHaveBeenCalledWith('test', 'teacher', 'manager_ivan');
         });
     });
 });

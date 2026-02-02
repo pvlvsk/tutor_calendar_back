@@ -11,6 +11,26 @@ export declare class AuthController {
             lastName: string | undefined;
             username: string | undefined;
         };
+        isDeleted?: undefined;
+        canRestore?: undefined;
+        daysLeft?: undefined;
+        deletedAt?: undefined;
+        user?: undefined;
+        roles?: undefined;
+        currentRole?: undefined;
+        token?: undefined;
+    } | {
+        isNewUser: boolean;
+        isDeleted: boolean;
+        canRestore: boolean;
+        daysLeft: number;
+        deletedAt: string;
+        telegramUser: {
+            id: number;
+            firstName: string | undefined;
+            lastName: string | undefined;
+            username: string | undefined;
+        };
         user?: undefined;
         roles?: undefined;
         currentRole?: undefined;
@@ -29,6 +49,10 @@ export declare class AuthController {
         currentRole: "teacher" | "student" | "parent";
         token: string;
         telegramUser?: undefined;
+        isDeleted?: undefined;
+        canRestore?: undefined;
+        daysLeft?: undefined;
+        deletedAt?: undefined;
     } | {
         isNewUser: boolean;
         user: {
@@ -43,6 +67,10 @@ export declare class AuthController {
         currentRole: null;
         token: null;
         telegramUser?: undefined;
+        isDeleted?: undefined;
+        canRestore?: undefined;
+        daysLeft?: undefined;
+        deletedAt?: undefined;
     }>;
     register(dto: RegisterDto): Promise<{
         user: {
@@ -174,4 +202,39 @@ export declare class AuthController {
     getBetaStatus(req: any): {
         isBetaTester: any;
     };
+    deleteAccount(req: any): Promise<{
+        success: boolean;
+        message: string;
+        deletedAt: string;
+        restoreDays: number;
+    }>;
+    restoreAccount(dto: InitDto): Promise<{
+        success: boolean;
+        message: string;
+        user: {
+            id: string;
+            telegramId: number;
+            firstName: string;
+            lastName: string;
+            username: string;
+            isBetaTester: boolean;
+        };
+        roles: ("teacher" | "student" | "parent")[];
+        currentRole: "teacher" | "student" | "parent";
+        token: string;
+    } | {
+        success: boolean;
+        message: string;
+        user: {
+            id: string;
+            telegramId: number;
+            firstName: string;
+            lastName: string;
+            username: string;
+            isBetaTester: boolean;
+        };
+        roles: ("teacher" | "student" | "parent")[];
+        currentRole: null;
+        token: null;
+    }>;
 }

@@ -18,6 +18,8 @@ const shared_module_1 = require("./shared/shared.module");
 const health_module_1 = require("./health/health.module");
 const bot_module_1 = require("./bot/bot.module");
 const admin_1 = require("./admin");
+const support_module_1 = require("./support/support.module");
+const google_calendar_1 = require("./google-calendar");
 const logging_middleware_1 = require("./shared/logging.middleware");
 const entities = require("./database/entities");
 let AppModule = class AppModule {
@@ -47,6 +49,8 @@ exports.AppModule = AppModule = __decorate([
             health_module_1.HealthModule,
             bot_module_1.BotModule,
             admin_1.AdminModule,
+            support_module_1.SupportModule,
+            google_calendar_1.GoogleCalendarModule,
         ],
     })
 ], AppModule);

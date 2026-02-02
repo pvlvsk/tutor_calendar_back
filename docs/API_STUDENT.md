@@ -21,6 +21,35 @@
 ### GET /api/students/me/teachers
 Получить список учителей.
 
+Response:
+```json
+[
+  {
+    "teacherId": "uuid",
+    "displayName": "Иван Петров",
+    "bio": "Опытный преподаватель",
+    "archivedAt": null,
+    "teacherUser": {
+      "id": "user-uuid",
+      "firstName": "Иван",
+      "lastName": "Петров",
+      "username": "ivan_teacher"
+    },
+    "subjects": [
+      {
+        "subjectId": "uuid",
+        "name": "Математика",
+        "colorHex": "#4CAF50"
+      }
+    ]
+  }
+]
+```
+
+**Поле `archivedAt`:**
+- `null` — ученик активен
+- ISO-дата — учитель добавил ученика в архив. На фронте показывается предупреждение "Учитель добавил вас в архив"
+
 ### GET /api/students/me/teachers/:teacherId
 Получить информацию об учителе.
 

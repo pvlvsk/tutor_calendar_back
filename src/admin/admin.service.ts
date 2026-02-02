@@ -534,7 +534,8 @@ export class AdminService {
   async getRequestsChartData(
     from: Date,
     to: Date,
-    interval: "minute" | "hour" | "day" = "hour"
+    interval: "minute" | "hour" | "day" = "hour",
+    userSearch?: string
   ): Promise<Array<{ time: string; success: number; errors: number }>> {
     let dateFormat: string;
     let dateTrunc: string;
@@ -555,12 +556,37 @@ export class AdminService {
         break;
     }
 
-    const result = await this.requestLogRepo
+    const query = this.requestLogRepo
       .createQueryBuilder("r")
       .select(`TO_CHAR(DATE_TRUNC('${dateTrunc}', r."createdAt"), '${dateFormat}')`, "time")
       .addSelect("COUNT(*) FILTER (WHERE r.statusCode < 400)", "success")
       .addSelect("COUNT(*) FILTER (WHERE r.statusCode >= 400)", "errors")
-      .where("r.createdAt BETWEEN :from AND :to", { from, to })
+      .where("r.createdAt BETWEEN :from AND :to", { from, to });
+
+    // Фильтрация по пользователю
+    if (userSearch) {
+      const cleanUsername = userSearch.startsWith("@")
+        ? userSearch.slice(1)
+        : userSearch;
+
+      const isUuid =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          cleanUsername
+        );
+
+      if (isUuid) {
+        query.andWhere("r.userId = :userId", { userId: cleanUsername });
+      } else {
+        // Нужен join с users для поиска по username
+        query
+          .leftJoin("users", "u", "u.id = r.userId")
+          .andWhere("LOWER(u.username) LIKE LOWER(:userSearchLike)", {
+            userSearchLike: `%${cleanUsername}%`,
+          });
+      }
+    }
+
+    const result = await query
       .groupBy(`DATE_TRUNC('${dateTrunc}', r."createdAt")`)
       .orderBy(`DATE_TRUNC('${dateTrunc}', r."createdAt")`, "ASC")
       .getRawMany();
@@ -619,6 +645,46 @@ export class AdminService {
       eventName: r.eventName,
       category: r.category,
       count: parseInt(r.count),
+    }));
+  }
+
+  /**
+   * Получение статистики по источникам регистрации (referralSource)
+   */
+  async getReferralStats(): Promise<
+    Array<{
+      source: string;
+      count: number;
+      teachers: number;
+      students: number;
+      parents: number;
+      lastRegisteredAt: string;
+    }>
+  > {
+    // Получаем всех пользователей с referralSource
+    const result = await this.userRepo
+      .createQueryBuilder("u")
+      .leftJoin(TeacherProfile, "t", "t.userId = u.id")
+      .leftJoin(StudentProfile, "s", "s.userId = u.id")
+      .leftJoin("parent_profiles", "p", "p.userId = u.id")
+      .select("u.referralSource", "source")
+      .addSelect("COUNT(DISTINCT u.id)", "count")
+      .addSelect("COUNT(DISTINCT t.id)", "teachers")
+      .addSelect("COUNT(DISTINCT s.id)", "students")
+      .addSelect("COUNT(DISTINCT p.id)", "parents")
+      .addSelect("MAX(u.createdAt)", "lastRegisteredAt")
+      .where("u.referralSource IS NOT NULL")
+      .groupBy("u.referralSource")
+      .orderBy("count", "DESC")
+      .getRawMany();
+
+    return result.map((r) => ({
+      source: r.source,
+      count: parseInt(r.count) || 0,
+      teachers: parseInt(r.teachers) || 0,
+      students: parseInt(r.students) || 0,
+      parents: parseInt(r.parents) || 0,
+      lastRegisteredAt: r.lastRegisteredAt,
     }));
   }
 

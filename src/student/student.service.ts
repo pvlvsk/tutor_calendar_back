@@ -127,6 +127,7 @@ export class StudentService {
         teacherUser: this.formatUserInfo(link.teacher.user),
         displayName: link.teacher.displayName,
         bio: link.teacher.bio,
+        archivedAt: link.archivedAt?.toISOString() || null,
         subjects: subjects.map((s) => ({
           subjectId: s.id,
           name: s.name,

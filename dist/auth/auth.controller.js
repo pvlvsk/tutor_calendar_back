@@ -26,7 +26,7 @@ let AuthController = class AuthController {
         return this.authService.init(dto.initData);
     }
     register(dto) {
-        return this.authService.register(dto.initData, dto.role);
+        return this.authService.register(dto.initData, dto.role, dto.referralSource);
     }
     selectRole(dto) {
         return this.authService.selectRole(dto.initData, dto.role);
@@ -57,6 +57,12 @@ let AuthController = class AuthController {
         return {
             isBetaTester: req.user.isBetaTester || false,
         };
+    }
+    deleteAccount(req) {
+        return this.authService.deleteAccount(req.user.sub);
+    }
+    restoreAccount(dto) {
+        return this.authService.restoreAccount(dto.initData);
     }
 };
 exports.AuthController = AuthController;
@@ -162,6 +168,24 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", void 0)
 ], AuthController.prototype, "getBetaStatus", null);
+__decorate([
+    (0, common_1.Post)('delete-account'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, swagger_1.ApiBearerAuth)(),
+    (0, swagger_1.ApiOperation)({ summary: 'Мягкое удаление аккаунта (можно восстановить в течение 7 дней)' }),
+    __param(0, (0, common_1.Request)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], AuthController.prototype, "deleteAccount", null);
+__decorate([
+    (0, common_1.Post)('restore-account'),
+    (0, swagger_1.ApiOperation)({ summary: 'Восстановить удалённый аккаунт' }),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [auth_dto_1.InitDto]),
+    __metadata("design:returntype", void 0)
+], AuthController.prototype, "restoreAccount", null);
 exports.AuthController = AuthController = __decorate([
     (0, swagger_1.ApiTags)('auth'),
     (0, common_1.Controller)('auth'),
