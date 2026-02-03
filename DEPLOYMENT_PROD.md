@@ -41,6 +41,11 @@ JWT_SECRET=секретный_ключ_минимум_32_символа
 BOT_TOKEN=токен_от_BotFather
 BOT_USERNAME=имя_бота_без_@
 WEBAPP_URL=https://quickbotics.ru
+
+# Google Calendar OAuth (опционально)
+GOOGLE_CLIENT_ID=your_client_id
+GOOGLE_CLIENT_SECRET=your_client_secret
+GOOGLE_CALLBACK_URL=https://api.quickbotics.ru/api/auth/google/calendar/callback
 ```
 
 ### 4. Запустить
@@ -92,6 +97,56 @@ postgres:
 - **Backend** — через Docker сеть (`postgres:5432`)
 - **DBeaver/pgAdmin** — через SSH туннель (см. ниже)
 - **Извне напрямую** — невозможно, порт закрыт
+
+---
+
+## Добавление переменных в .env
+
+### Через nano (редактор)
+
+```bash
+cd ~/tutor_calendar_back
+nano .env
+# Добавь нужные переменные, сохрани: Ctrl+O, Enter, Ctrl+X
+```
+
+### Через команду (без редактора)
+
+```bash
+cd ~/tutor_calendar_back
+
+# Добавить одну переменную
+echo 'GOOGLE_CLIENT_ID=твой_client_id' >> .env
+
+# Добавить несколько переменных сразу
+cat >> .env << 'EOF'
+
+# Google Calendar OAuth
+GOOGLE_CLIENT_ID=твой_client_id
+GOOGLE_CLIENT_SECRET=твой_client_secret
+GOOGLE_CALLBACK_URL=https://api.quickbotics.ru/api/auth/google/calendar/callback
+EOF
+```
+
+### После изменения .env
+
+```bash
+# Перезапустить backend чтобы переменные применились
+docker compose -f docker-compose.prod.yml restart backend
+
+# Проверить что backend запустился
+docker compose -f docker-compose.prod.yml logs --tail=20 backend
+```
+
+### Проверить текущие переменные
+
+```bash
+# Посмотреть .env файл
+cat .env
+
+# Проверить переменные внутри контейнера
+docker compose -f docker-compose.prod.yml exec backend printenv | grep GOOGLE
+```
 
 ---
 
@@ -412,6 +467,56 @@ URL: `http://IP:9000`
 docker exec -it teach-postgres psql -U postgres -c "ALTER USER postgres WITH PASSWORD 'пароль_из_env';"
 docker compose -f docker-compose.prod.yml restart backend
 ```
+
+---
+
+## Управление администраторами
+
+Админы хранятся в таблице `admin_users` в базе данных.
+
+### Просмотр текущих админов
+
+```bash
+docker compose -f docker-compose.prod.yml exec postgres \
+  psql -U postgres -d teach_mini_app -c "SELECT id, login FROM admin_users;"
+```
+
+### Создание нового админа
+
+```bash
+# 1. Сгенерировать хэш пароля (замени MY_PASSWORD на свой пароль)
+docker compose -f docker-compose.prod.yml exec backend node -e "
+const bcrypt = require('bcrypt');
+const hash = bcrypt.hashSync('MY_PASSWORD', 10);
+console.log('INSERT INTO admin_users (login, \"passwordHash\") VALUES (\\'MY_LOGIN\\', \\'' + hash + '\\');');
+"
+
+# 2. Скопировать выданный SQL и выполнить в psql
+docker compose -f docker-compose.prod.yml exec postgres psql -U postgres -d teach_mini_app
+
+# В psql вставить SQL:
+INSERT INTO admin_users (login, "passwordHash") VALUES ('my_login', '$2b$10$...');
+\q
+```
+
+### Удаление админа
+
+```bash
+docker compose -f docker-compose.prod.yml exec postgres \
+  psql -U postgres -d teach_mini_app -c "DELETE FROM admin_users WHERE login = 'admin';"
+```
+
+### Смена пароля
+
+1. Сгенерируй новый хэш (см. выше)
+2. Обнови в базе:
+
+```bash
+docker compose -f docker-compose.prod.yml exec postgres \
+  psql -U postgres -d teach_mini_app -c "UPDATE admin_users SET \"passwordHash\" = '\$2b\$10\$...' WHERE login = 'my_login';"
+```
+
+> **Важно:** При первом деплое админа нет — нужно создать вручную.
 
 ---
 

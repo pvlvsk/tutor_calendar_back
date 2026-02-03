@@ -15,66 +15,60 @@ import { Repository } from "typeorm";
 import { GoogleCalendarService } from "../google-calendar.service";
 import { User } from "../../database/entities";
 
-// Мокаем googleapis
-jest.mock("googleapis", () => {
-  const mockOAuth2Client = {
-    generateAuthUrl: jest.fn().mockReturnValue("https://accounts.google.com/o/oauth2/..."),
-    getToken: jest.fn().mockResolvedValue({
-      tokens: {
-        access_token: "mock-access-token",
-        refresh_token: "mock-refresh-token",
-      },
+// Мокаем @googleapis/calendar и google-auth-library
+const mockOAuth2Client = {
+  generateAuthUrl: jest.fn().mockReturnValue("https://accounts.google.com/o/oauth2/auth?..."),
+  getToken: jest.fn().mockResolvedValue({
+    tokens: {
+      access_token: "mock-access-token",
+      refresh_token: "mock-refresh-token",
+      id_token: "mock-id-token",
+    },
+  }),
+  setCredentials: jest.fn(),
+  verifyIdToken: jest.fn().mockResolvedValue({
+    getPayload: () => ({
+      email: "user@gmail.com",
     }),
-    setCredentials: jest.fn(),
-  };
+  }),
+};
 
-  const mockCalendar = {
-    events: {
-      list: jest.fn().mockResolvedValue({
-        data: {
-          items: [
-            {
-              id: "event-1",
-              summary: "Урок математики",
-              description: "Подготовка к ЕГЭ",
-              start: { dateTime: "2024-01-15T10:00:00+03:00" },
-              end: { dateTime: "2024-01-15T11:00:00+03:00" },
-              recurringEventId: "recurring-parent-1",
-            },
-            {
-              id: "event-2",
-              summary: "Урок физики",
-              start: { dateTime: "2024-01-15T12:00:00+03:00" },
-              end: { dateTime: "2024-01-15T13:00:00+03:00" },
-            },
-          ],
+const mockCalendarEvents = {
+  list: jest.fn().mockResolvedValue({
+    data: {
+      items: [
+        {
+          id: "event-1",
+          summary: "Урок математики",
+          description: "Подготовка к ЕГЭ",
+          start: { dateTime: "2024-01-15T10:00:00+03:00" },
+          end: { dateTime: "2024-01-15T11:00:00+03:00" },
+          recurringEventId: "recurring-parent-1",
         },
-      }),
-      insert: jest.fn().mockResolvedValue({
-        data: { id: "new-event-id" },
-      }),
-      delete: jest.fn().mockResolvedValue({}),
+        {
+          id: "event-2",
+          summary: "Урок физики",
+          start: { dateTime: "2024-01-15T12:00:00+03:00" },
+          end: { dateTime: "2024-01-15T13:00:00+03:00" },
+        },
+      ],
     },
-  };
+  }),
+  insert: jest.fn().mockResolvedValue({
+    data: { id: "new-event-id" },
+  }),
+  delete: jest.fn().mockResolvedValue({}),
+};
 
-  const mockOauth2 = {
-    userinfo: {
-      get: jest.fn().mockResolvedValue({
-        data: { email: "user@gmail.com" },
-      }),
-    },
-  };
+jest.mock("google-auth-library", () => ({
+  OAuth2Client: jest.fn().mockImplementation(() => mockOAuth2Client),
+}));
 
-  return {
-    google: {
-      auth: {
-        OAuth2: jest.fn().mockImplementation(() => mockOAuth2Client),
-      },
-      calendar: jest.fn().mockReturnValue(mockCalendar),
-      oauth2: jest.fn().mockReturnValue(mockOauth2),
-    },
-  };
-});
+jest.mock("@googleapis/calendar", () => ({
+  calendar: jest.fn().mockImplementation(() => ({
+    events: mockCalendarEvents,
+  })),
+}));
 
 describe("GoogleCalendarService", () => {
   let service: GoogleCalendarService;

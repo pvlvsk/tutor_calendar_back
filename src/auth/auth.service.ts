@@ -568,35 +568,21 @@ export class AuthService {
       (user as any)[`${role}Profile`] = profile;
     }
 
+    let isNewConnection = false;
+
     if (role === "student" && profile) {
-      const existingLink = await this.teacherStudentLinkRepository.findOne({
-        where: { teacherId: invitation.teacherId, studentId: profile.id },
-      });
-      if (!existingLink) {
-        const link = this.teacherStudentLinkRepository.create({
-          teacherId: invitation.teacherId,
-          studentId: profile.id,
-        });
-        await this.teacherStudentLinkRepository.save(link);
-      }
+      const result = await this.ensureTeacherStudentLink(
+        invitation.teacherId,
+        profile.id
+      );
+      isNewConnection = result.isNew;
     } else if (role === "parent" && invitation.studentId && profile) {
-      const existingRelation =
-        await this.parentStudentRelationRepository.findOne({
-          where: {
-            parentId: profile.id,
-            studentId: invitation.studentId,
-            teacherId: invitation.teacherId,
-          },
-        });
-      if (!existingRelation) {
-        const relation = this.parentStudentRelationRepository.create({
-          parentId: profile.id,
-          studentId: invitation.studentId,
-          teacherId: invitation.teacherId,
-          notificationsEnabled: true,
-        });
-        await this.parentStudentRelationRepository.save(relation);
-      }
+      const result = await this.ensureParentStudentRelation(
+        profile.id,
+        invitation.studentId,
+        invitation.teacherId
+      );
+      isNewConnection = result.isNew;
     }
 
     invitation.usedAt = new Date();
@@ -605,11 +591,43 @@ export class AuthService {
     const roles = this.getUserRoles(user);
     const token = this.generateToken(user, role);
 
+    // Отправляем уведомления ТОЛЬКО если связь новая
+    if (isNewConnection && telegramUser) {
+      this.botService
+        .notifyUserWelcome(
+          telegramUser.id,
+          role,
+          role === "student" ? invitation.teacher.displayName : undefined
+        )
+        .catch((err) => {
+          this.logger.warn(
+            `Failed to send welcome notification: ${err.message}`
+          );
+        });
+
+      // Уведомляем учителя о новом ученике
+      if (role === "student" && invitation.teacher.user?.telegramId) {
+        const studentName = formatFullName(
+          telegramUser.first_name,
+          telegramUser.last_name
+        );
+        this.botService
+          .notifyTeacherNewStudent(
+            invitation.teacher.user.telegramId,
+            studentName || "Новый ученик"
+          )
+          .catch((err) => {
+            this.logger.warn(`Failed to notify teacher: ${err.message}`);
+          });
+      }
+    }
+
     return {
       user: this.formatUser(user),
       roles,
       currentRole: role,
       token,
+      isNewConnection,
       invitation: {
         type: invitation.type,
         teacher: {
@@ -676,41 +694,52 @@ export class AuthService {
       user.studentProfile = studentProfile;
     }
 
-    await this.ensureTeacherStudentLink(teacher.id, studentProfile.id);
+    const { isNew: isNewConnection } = await this.ensureTeacherStudentLink(
+      teacher.id,
+      studentProfile.id
+    );
 
     const roles = this.getUserRoles(user);
     const token = this.generateToken(user, "student");
 
     this.logger.log(
-      `JoinTeacher: tg=${telegramUser.id} linked to teacher=${teacher.id}`
+      `JoinTeacher: tg=${telegramUser.id} linked to teacher=${teacher.id}, isNewConnection=${isNewConnection}`
     );
 
-    // Отправляем приветственное уведомление ученику
-    this.botService
-      .notifyUserWelcome(telegramUser.id, "student", teacher.displayName)
-      .catch((err) => {
-        this.logger.warn(`Failed to send welcome notification: ${err.message}`);
-      });
-
-    // Уведомляем учителя о новом ученике
-    if (teacher.user?.telegramId) {
-      const studentName = formatFullName(
-        telegramUser.first_name,
-        telegramUser.last_name
-      );
+    // Отправляем уведомления ТОЛЬКО если связь новая
+    if (isNewConnection) {
+      // Приветственное уведомление ученику
       this.botService
-        .notifyTeacherNewStudent(teacher.user.telegramId, studentName || "Новый ученик")
+        .notifyUserWelcome(telegramUser.id, "student", teacher.displayName)
         .catch((err) => {
-          this.logger.warn(`Failed to notify teacher: ${err.message}`);
+          this.logger.warn(
+            `Failed to send welcome notification: ${err.message}`
+          );
         });
+
+      // Уведомляем учителя о новом ученике
+      if (teacher.user?.telegramId) {
+        const studentName = formatFullName(
+          telegramUser.first_name,
+          telegramUser.last_name
+        );
+        this.botService
+          .notifyTeacherNewStudent(
+            teacher.user.telegramId,
+            studentName || "Новый ученик"
+          )
+          .catch((err) => {
+            this.logger.warn(`Failed to notify teacher: ${err.message}`);
+          });
+      }
     }
 
-    const botUsername = getBotUsername();
     return {
       user: this.formatUser(user),
       roles,
       currentRole: "student" as UserRole,
       token,
+      isNewConnection,
       teacher: {
         id: teacher.id,
         displayName: teacher.displayName,
@@ -741,6 +770,15 @@ export class AuthService {
 
     let user = await this.findOrCreateUser(telegramUser);
 
+    // Проверяем что у ученика есть хотя бы один учитель
+    // (связь parent-student требует teacherId в текущей архитектуре)
+    if (!student.teacherStudentLinks || student.teacherStudentLinks.length === 0) {
+      this.logger.warn(
+        `JoinAsParent failed: student has no teachers code=${parentInviteCode}`
+      );
+      throw new BadRequestException("STUDENT_HAS_NO_TEACHERS");
+    }
+
     let parentProfile = user.parentProfile;
     if (!parentProfile) {
       parentProfile = (await this.createProfile(
@@ -751,31 +789,43 @@ export class AuthService {
       user.parentProfile = parentProfile;
     }
 
+    // Проверяем, есть ли хотя бы одна новая связь
+    let isNewConnection = false;
     for (const link of student.teacherStudentLinks) {
-      await this.ensureParentStudentRelation(
+      const result = await this.ensureParentStudentRelation(
         parentProfile.id,
         student.id,
         link.teacherId
       );
+      if (result.isNew) {
+        isNewConnection = true;
+      }
     }
 
     const roles = this.getUserRoles(user);
     const token = this.generateToken(user, "parent");
 
     this.logger.log(
-      `JoinAsParent: tg=${telegramUser.id} linked to student=${student.id}`
+      `JoinAsParent: tg=${telegramUser.id} linked to student=${student.id}, isNewConnection=${isNewConnection}`
     );
 
-    // Отправляем приветственное уведомление родителю
-    this.botService.notifyUserWelcome(telegramUser.id, "parent").catch((err) => {
-      this.logger.warn(`Failed to send welcome notification: ${err.message}`);
-    });
+    // Отправляем уведомление ТОЛЬКО если связь новая
+    if (isNewConnection) {
+      this.botService
+        .notifyUserWelcome(telegramUser.id, "parent")
+        .catch((err) => {
+          this.logger.warn(
+            `Failed to send welcome notification: ${err.message}`
+          );
+        });
+    }
 
     return {
       user: this.formatUser(user),
       roles,
       currentRole: "parent" as UserRole,
       token,
+      isNewConnection,
       student: {
         id: student.id,
         name: formatFullName(student.user.firstName, student.user.lastName),
@@ -819,8 +869,12 @@ export class AuthService {
 
   /**
    * Создаёт связь учитель-ученик, если не существует
+   * @returns { isNew: boolean } - true если связь была создана, false если уже существовала
    */
-  private async ensureTeacherStudentLink(teacherId: string, studentId: string) {
+  private async ensureTeacherStudentLink(
+    teacherId: string,
+    studentId: string
+  ): Promise<{ isNew: boolean }> {
     const existingLink = await this.teacherStudentLinkRepository.findOne({
       where: { teacherId, studentId },
     });
@@ -831,17 +885,21 @@ export class AuthService {
         studentId,
       });
       await this.teacherStudentLinkRepository.save(link);
+      return { isNew: true };
     }
+
+    return { isNew: false };
   }
 
   /**
    * Создаёт связь родитель-ученик-учитель, если не существует
+   * @returns { isNew: boolean } - true если связь была создана, false если уже существовала
    */
   private async ensureParentStudentRelation(
     parentId: string,
     studentId: string,
     teacherId: string
-  ) {
+  ): Promise<{ isNew: boolean }> {
     const existingRelation = await this.parentStudentRelationRepository.findOne(
       {
         where: { parentId, studentId, teacherId },
@@ -856,7 +914,10 @@ export class AuthService {
         notificationsEnabled: true,
       });
       await this.parentStudentRelationRepository.save(relation);
+      return { isNew: true };
     }
+
+    return { isNew: false };
   }
 
   /**
