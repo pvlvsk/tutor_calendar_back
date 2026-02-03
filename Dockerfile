@@ -8,7 +8,8 @@ RUN npm ci
 COPY . .
 
 # Сборка без тестов (тесты запускаются локально перед деплоем)
-RUN npm run build:no-tests
+# Увеличиваем лимит памяти для TypeScript компиляции
+RUN NODE_OPTIONS="--max-old-space-size=1536" npm run build:no-tests
 
 EXPOSE 3000
 
