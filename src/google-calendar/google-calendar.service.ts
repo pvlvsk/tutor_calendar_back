@@ -1,7 +1,8 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
-import { google, calendar_v3 } from "googleapis";
+import { OAuth2Client } from "google-auth-library";
+import { calendar_v3, calendar } from "@googleapis/calendar";
 import { User } from "../database/entities";
 
 export interface GoogleCalendarEvent {
@@ -18,13 +19,13 @@ export interface GoogleCalendarEvent {
 @Injectable()
 export class GoogleCalendarService {
   private readonly logger = new Logger(GoogleCalendarService.name);
-  private readonly oauth2Client;
+  private readonly oauth2Client: OAuth2Client;
 
   constructor(
     @InjectRepository(User)
     private readonly userRepo: Repository<User>
   ) {
-    this.oauth2Client = new google.auth.OAuth2(
+    this.oauth2Client = new OAuth2Client(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET,
       process.env.GOOGLE_CALLBACK_URL
@@ -59,10 +60,16 @@ export class GoogleCalendarService {
     const { tokens } = await this.oauth2Client.getToken(code);
     this.oauth2Client.setCredentials(tokens);
 
-    // Получаем email пользователя
-    const oauth2 = google.oauth2({ version: "v2", auth: this.oauth2Client });
-    const userInfo = await oauth2.userinfo.get();
-    const email = userInfo.data.email || "";
+    // Получаем email из токена (id_token содержит email)
+    let email = "";
+    if (tokens.id_token) {
+      const ticket = await this.oauth2Client.verifyIdToken({
+        idToken: tokens.id_token,
+        audience: process.env.GOOGLE_CLIENT_ID,
+      });
+      const payload = ticket.getPayload();
+      email = payload?.email || "";
+    }
 
     // Сохраняем refresh token в БД
     await this.userRepo.update(userId, {
@@ -106,14 +113,14 @@ export class GoogleCalendarService {
   /**
    * Получает авторизованный клиент для пользователя
    */
-  private async getAuthorizedClient(userId: string) {
+  private async getAuthorizedClient(userId: string): Promise<OAuth2Client> {
     const user = await this.userRepo.findOne({ where: { id: userId } });
 
     if (!user?.googleRefreshToken) {
       throw new Error("Google Calendar not connected");
     }
 
-    const oauth2Client = new google.auth.OAuth2(
+    const oauth2Client = new OAuth2Client(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET,
       process.env.GOOGLE_CALLBACK_URL
@@ -135,9 +142,9 @@ export class GoogleCalendarService {
     timeMax: Date
   ): Promise<GoogleCalendarEvent[]> {
     const auth = await this.getAuthorizedClient(userId);
-    const calendar = google.calendar({ version: "v3", auth });
+    const calendarApi = calendar({ version: "v3", auth });
 
-    const response = await calendar.events.list({
+    const response = await calendarApi.events.list({
       calendarId: "primary",
       timeMin: timeMin.toISOString(),
       timeMax: timeMax.toISOString(),
@@ -164,9 +171,9 @@ export class GoogleCalendarService {
     event: GoogleCalendarEvent
   ): Promise<string> {
     const auth = await this.getAuthorizedClient(userId);
-    const calendar = google.calendar({ version: "v3", auth });
+    const calendarApi = calendar({ version: "v3", auth });
 
-    const response = await calendar.events.insert({
+    const response = await calendarApi.events.insert({
       calendarId: "primary",
       requestBody: {
         summary: event.summary,
@@ -193,9 +200,9 @@ export class GoogleCalendarService {
    */
   async deleteEvent(userId: string, eventId: string): Promise<void> {
     const auth = await this.getAuthorizedClient(userId);
-    const calendar = google.calendar({ version: "v3", auth });
+    const calendarApi = calendar({ version: "v3", auth });
 
-    await calendar.events.delete({
+    await calendarApi.events.delete({
       calendarId: "primary",
       eventId,
     });
