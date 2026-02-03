@@ -452,7 +452,9 @@ export class AdminService {
     statusFilter?: "all" | "success" | "error",
     method?: string,
     path?: string,
-    userSearch?: string
+    userSearch?: string,
+    userList?: string[],
+    userListMode?: "include" | "exclude"
   ): Promise<{
     logs: Array<RequestLog & { userName?: string; userUsername?: string }>;
     total: number;
@@ -480,8 +482,27 @@ export class AdminService {
       );
     }
 
-    // Фильтрация по пользователю (userId или username)
-    if (userSearch) {
+    // Фильтрация по списку пользователей (whitelist/blacklist)
+    if (userList && userList.length > 0 && userListMode) {
+      const cleanUsernames = userList.map((u) =>
+        u.startsWith("@") ? u.slice(1).toLowerCase() : u.toLowerCase()
+      );
+
+      if (userListMode === "include") {
+        // Показать только этих пользователей (по username)
+        query.andWhere("LOWER(u.username) IN (:...usernames)", {
+          usernames: cleanUsernames,
+        });
+      } else {
+        // Скрыть этих пользователей (по username)
+        query.andWhere(
+          "(LOWER(u.username) NOT IN (:...usernames) OR u.username IS NULL)",
+          { usernames: cleanUsernames }
+        );
+      }
+    }
+    // Фильтрация по одному пользователю (поиск)
+    else if (userSearch) {
       // Убираем @ если пользователь его ввёл
       const cleanUsername = userSearch.startsWith("@")
         ? userSearch.slice(1)
@@ -686,6 +707,78 @@ export class AdminService {
       parents: parseInt(r.parents) || 0,
       lastRegisteredAt: r.lastRegisteredAt,
     }));
+  }
+
+  /**
+   * Получение списка пользователей (учителей или учеников).
+   */
+  async getUsers(
+    role: "teacher" | "student",
+    page: number = 1,
+    limit: number = 50
+  ): Promise<{
+    users: Array<{
+      id: string;
+      firstName: string | null;
+      lastName: string | null;
+      username: string | null;
+      telegramId: string;
+      createdAt: string;
+      isNew: boolean;
+      profileId: string;
+      displayName?: string;
+    }>;
+    total: number;
+  }> {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (role === "teacher") {
+      const [teachers, total] = await this.teacherRepo
+        .createQueryBuilder("t")
+        .leftJoinAndSelect("t.user", "u")
+        .orderBy("u.createdAt", "DESC")
+        .skip((page - 1) * limit)
+        .take(limit)
+        .getManyAndCount();
+
+      return {
+        users: teachers.map((t) => ({
+          id: t.user.id,
+          firstName: t.user.firstName,
+          lastName: t.user.lastName,
+          username: t.user.username,
+          telegramId: String(t.user.telegramId),
+          createdAt: t.user.createdAt.toISOString(),
+          isNew: t.user.createdAt >= today,
+          profileId: t.id,
+          displayName: t.displayName,
+        })),
+        total,
+      };
+    } else {
+      const [students, total] = await this.studentRepo
+        .createQueryBuilder("s")
+        .leftJoinAndSelect("s.user", "u")
+        .orderBy("u.createdAt", "DESC")
+        .skip((page - 1) * limit)
+        .take(limit)
+        .getManyAndCount();
+
+      return {
+        users: students.map((s) => ({
+          id: s.user.id,
+          firstName: s.user.firstName,
+          lastName: s.user.lastName,
+          username: s.user.username,
+          telegramId: String(s.user.telegramId),
+          createdAt: s.user.createdAt.toISOString(),
+          isNew: s.user.createdAt >= today,
+          profileId: s.id,
+        })),
+        total,
+      };
+    }
   }
 
   /**

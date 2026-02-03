@@ -137,15 +137,21 @@ export class AdminController {
     @Query("status") status?: "all" | "success" | "error",
     @Query("method") method?: string,
     @Query("path") path?: string,
-    @Query("user") userSearch?: string
+    @Query("user") userSearch?: string,
+    @Query("users") users?: string,
+    @Query("userMode") userMode?: "include" | "exclude"
   ) {
+    const userList = users ? users.split(",").filter(Boolean) : undefined;
+
     return this.adminService.getRequestLogsWithUserInfo(
       parseInt(page || "1"),
       parseInt(limit || "50"),
       status,
       method,
       path,
-      userSearch
+      userSearch,
+      userList,
+      userMode
     );
   }
 
@@ -237,6 +243,25 @@ export class AdminController {
     });
 
     return { success: true };
+  }
+
+  // ==================== USERS ====================
+
+  /**
+   * Получить список пользователей (учителей или учеников).
+   */
+  @Get("users")
+  @UseGuards(AdminAuthGuard)
+  async getUsers(
+    @Query("role") role: "teacher" | "student",
+    @Query("page") page?: string,
+    @Query("limit") limit?: string
+  ) {
+    return this.adminService.getUsers(
+      role,
+      parseInt(page || "1"),
+      parseInt(limit || "50")
+    );
   }
 
   // ==================== SUPPORT ====================
