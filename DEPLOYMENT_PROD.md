@@ -40,12 +40,12 @@ POSTGRES_PASSWORD=надёжный_пароль_для_БД
 JWT_SECRET=секретный_ключ_минимум_32_символа
 BOT_TOKEN=токен_от_BotFather
 BOT_USERNAME=имя_бота_без_@
-WEBAPP_URL=https://quickbotics.ru
+WEBAPP_URL=https://tutorscalendar.ru
 
 # Google Calendar OAuth (опционально)
 GOOGLE_CLIENT_ID=your_client_id
 GOOGLE_CLIENT_SECRET=your_client_secret
-GOOGLE_CALLBACK_URL=https://api.quickbotics.ru/api/auth/google/calendar/callback
+GOOGLE_CALLBACK_URL=https://api.tutorscalendar.ru/api/auth/google/calendar/callback
 ```
 
 ### 4. Запустить
@@ -124,7 +124,7 @@ cat >> .env << 'EOF'
 # Google Calendar OAuth
 GOOGLE_CLIENT_ID=твой_client_id
 GOOGLE_CLIENT_SECRET=твой_client_secret
-GOOGLE_CALLBACK_URL=https://api.quickbotics.ru/api/auth/google/calendar/callback
+GOOGLE_CALLBACK_URL=https://api.tutorscalendar.ru/api/auth/google/calendar/callback
 EOF
 ```
 

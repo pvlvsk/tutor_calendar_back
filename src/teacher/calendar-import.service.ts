@@ -542,7 +542,7 @@ export class CalendarImportService {
     const icsLines: string[] = [
       "BEGIN:VCALENDAR",
       "VERSION:2.0",
-      "PRODID:-//Teach Mini App//Calendar Export//RU",
+      "PRODID:-//Tutors Calendar//Calendar Export//RU",
       "CALSCALE:GREGORIAN",
       "METHOD:PUBLISH",
       "X-WR-CALNAME:Мои уроки",

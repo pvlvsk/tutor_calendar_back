@@ -727,6 +727,7 @@ export class AdminService {
       isNew: boolean;
       profileId: string;
       displayName?: string;
+      referralSource?: string | null;
     }>;
     total: number;
   }> {
@@ -753,6 +754,7 @@ export class AdminService {
           isNew: t.user.createdAt >= today,
           profileId: t.id,
           displayName: t.displayName,
+          referralSource: t.user.referralSource,
         })),
         total,
       };
@@ -775,6 +777,7 @@ export class AdminService {
           createdAt: s.user.createdAt.toISOString(),
           isNew: s.user.createdAt >= today,
           profileId: s.id,
+          referralSource: s.user.referralSource,
         })),
         total,
       };

@@ -22,6 +22,38 @@ export class CreateSupportMessageDto {
   message: string;
 }
 
+export class CreateLandingSupportMessageDto {
+  @ApiProperty({
+    description: "Имя отправителя",
+    example: "Иван",
+    maxLength: 100,
+  })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(100)
+  name: string;
+
+  @ApiPropertyOptional({
+    description: "Контакт для ответа (Telegram/email)",
+    example: "@ivan или ivan@mail.ru",
+    maxLength: 100,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  contact?: string;
+
+  @ApiProperty({
+    description: "Текст сообщения",
+    example: "Хочу узнать подробнее о приложении",
+    maxLength: 2000,
+  })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(2000)
+  message: string;
+}
+
 export class UpdateSupportMessageDto {
   @ApiPropertyOptional({
     description: "Статус сообщения",

@@ -17,7 +17,7 @@ export interface SupportMessageWithUser {
     lastName: string | null;
     username: string | null;
     telegramId: string;
-  };
+  } | null;
 }
 
 @Injectable()
@@ -46,6 +46,27 @@ export class SupportService {
 
     const saved = await this.supportMessageRepo.save(supportMessage);
     this.logger.log(`Support message created: ${saved.id} by user ${userId}`);
+    return saved;
+  }
+
+  /**
+   * Создать сообщение с лендинга (без авторизации)
+   */
+  async createLandingMessage(
+    name: string,
+    message: string,
+    contact?: string
+  ): Promise<SupportMessage> {
+    const subject = `[Лендинг] ${name}${contact ? ` (${contact})` : ""}`;
+    const supportMessage = this.supportMessageRepo.create({
+      subject,
+      message,
+      status: "new",
+      // userId остаётся null — это анонимное сообщение с лендинга
+    });
+
+    const saved = await this.supportMessageRepo.save(supportMessage);
+    this.logger.log(`Landing support message created: ${saved.id} from ${name}`);
     return saved;
   }
 
@@ -91,13 +112,15 @@ export class SupportService {
         adminNotes: m.adminNotes,
         createdAt: m.createdAt,
         updatedAt: m.updatedAt,
-        user: {
-          id: m.user.id,
-          firstName: m.user.firstName,
-          lastName: m.user.lastName,
-          username: m.user.username,
-          telegramId: m.user.telegramId,
-        },
+        user: m.user
+          ? {
+              id: m.user.id,
+              firstName: m.user.firstName,
+              lastName: m.user.lastName,
+              username: m.user.username,
+              telegramId: m.user.telegramId,
+            }
+          : null,
       })),
       total,
     };

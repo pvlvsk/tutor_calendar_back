@@ -28,8 +28,8 @@ async function bootstrap() {
   }))
 
   const config = new DocumentBuilder()
-    .setTitle('Teach Mini App API')
-    .setDescription('API для приложения репетитора')
+    .setTitle('Tutors Calendar API')
+    .setDescription('API для приложения преподавателя')
     .setVersion('1.0')
     .addBearerAuth()
     .addTag('auth', 'Авторизация')

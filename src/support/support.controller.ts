@@ -9,12 +9,26 @@ import {
 import { ApiTags, ApiOperation, ApiBearerAuth } from "@nestjs/swagger";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { SupportService } from "./support.service";
-import { CreateSupportMessageDto } from "./support.dto";
+import { CreateSupportMessageDto, CreateLandingSupportMessageDto } from "./support.dto";
 
 @ApiTags("support")
 @Controller("support")
 export class SupportController {
   constructor(private supportService: SupportService) {}
+
+  /**
+   * Отправить сообщение с лендинга (без авторизации)
+   */
+  @Post("landing-message")
+  @ApiOperation({ summary: "Отправить сообщение с лендинга (публичный)" })
+  async createLandingMessage(@Body() dto: CreateLandingSupportMessageDto) {
+    await this.supportService.createLandingMessage(
+      dto.name,
+      dto.message,
+      dto.contact
+    );
+    return { success: true, message: "Сообщение отправлено" };
+  }
 
   /**
    * Отправить сообщение в поддержку

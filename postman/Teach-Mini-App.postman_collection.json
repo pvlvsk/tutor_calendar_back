@@ -1,7 +1,7 @@
 {
     "info": {
-        "name": "Teach Mini App API",
-        "description": "API для приложения репетитора",
+        "name": "Tutors Calendar API",
+        "description": "API для приложения преподавателя",
         "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
     },
     "variable": [
@@ -378,7 +378,7 @@
                                 ],
                                 "body": {
                                     "mode": "raw",
-                                    "raw": "{\n  \"displayName\": \"Иван Петров\",\n  \"bio\": \"Репетитор по математике, 10 лет опыта\"\n}"
+                                    "raw": "{\n  \"displayName\": \"Иван Петров\",\n  \"bio\": \"Преподаватель математики, 10 лет опыта\"\n}"
                                 },
                                 "url": {
                                     "raw": "{{baseUrl}}/teachers/me",

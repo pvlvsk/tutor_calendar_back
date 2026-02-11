@@ -16,12 +16,12 @@ export class SupportMessage {
   @PrimaryGeneratedColumn("uuid")
   id: string;
 
-  @Column({ type: "uuid" })
-  userId: string;
+  @Column({ type: "uuid", nullable: true })
+  userId: string | null;
 
-  @ManyToOne(() => User, { eager: true })
+  @ManyToOne(() => User, { eager: true, nullable: true })
   @JoinColumn({ name: "userId" })
-  user: User;
+  user: User | null;
 
   @Column({ type: "varchar", length: 255 })
   subject: string;
