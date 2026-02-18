@@ -16,6 +16,8 @@ import { BotModule } from "./bot/bot.module";
 import { AdminModule, RequestLoggerMiddleware } from "./admin";
 import { SupportModule } from "./support/support.module";
 import { GoogleCalendarModule } from "./google-calendar";
+import { EmailModule } from "./email";
+import { NotificationModule } from "./notifications";
 import { LoggingMiddleware } from "./shared/logging.middleware";
 import * as entities from "./database/entities";
 
@@ -53,6 +55,10 @@ import * as entities from "./database/entities";
     SupportModule,
     // Google Calendar интеграция
     GoogleCalendarModule,
+    // Email сервис (SMTP)
+    EmailModule,
+    // Мультиканальные уведомления (Telegram + MAX + Email)
+    NotificationModule,
   ],
 })
 export class AppModule implements NestModule {

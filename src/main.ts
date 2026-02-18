@@ -18,8 +18,11 @@ async function bootstrap() {
   app.use(urlencoded({ extended: true, limit: '10mb' }))
   
   app.setGlobalPrefix('api')
+  const allowedOrigins = process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(',').map(s => s.trim())
+    : true
   app.enableCors({
-    origin: true,
+    origin: allowedOrigins,
     credentials: true,
   })
   app.useGlobalPipes(new ValidationPipe({

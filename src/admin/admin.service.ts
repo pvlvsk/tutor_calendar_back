@@ -722,7 +722,8 @@ export class AdminService {
       firstName: string | null;
       lastName: string | null;
       username: string | null;
-      telegramId: string;
+      telegramId: string | null;
+      email: string | null;
       createdAt: string;
       isNew: boolean;
       profileId: string;
@@ -749,7 +750,8 @@ export class AdminService {
           firstName: t.user.firstName,
           lastName: t.user.lastName,
           username: t.user.username,
-          telegramId: String(t.user.telegramId),
+          telegramId: t.user.telegramId ? String(t.user.telegramId) : null,
+          email: t.user.email || null,
           createdAt: t.user.createdAt.toISOString(),
           isNew: t.user.createdAt >= today,
           profileId: t.id,
@@ -773,7 +775,8 @@ export class AdminService {
           firstName: s.user.firstName,
           lastName: s.user.lastName,
           username: s.user.username,
-          telegramId: String(s.user.telegramId),
+          telegramId: s.user.telegramId ? String(s.user.telegramId) : null,
+          email: s.user.email || null,
           createdAt: s.user.createdAt.toISOString(),
           isNew: s.user.createdAt >= today,
           profileId: s.id,

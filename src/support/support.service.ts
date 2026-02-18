@@ -16,7 +16,8 @@ export interface SupportMessageWithUser {
     firstName: string | null;
     lastName: string | null;
     username: string | null;
-    telegramId: string;
+    telegramId: string | null;
+    email: string | null;
   } | null;
 }
 
@@ -119,6 +120,7 @@ export class SupportService {
               lastName: m.user.lastName,
               username: m.user.username,
               telegramId: m.user.telegramId,
+              email: m.user.email || null,
             }
           : null,
       })),

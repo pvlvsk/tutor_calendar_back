@@ -2,11 +2,12 @@ import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards, Request } 
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger'
 import { StudentService } from './student.service'
 import { JwtAuthGuard } from '../auth/jwt-auth.guard'
+import { RequireProfileGuard } from '../auth/require-profile.guard'
 import { RolesGuard, Roles } from '../auth/roles.guard'
 
 @ApiTags('students')
 @Controller('students')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RequireProfileGuard, RolesGuard)
 @Roles('student')
 @ApiBearerAuth()
 export class StudentController {

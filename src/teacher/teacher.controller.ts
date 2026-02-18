@@ -20,6 +20,7 @@ import {
 import { TeacherService } from "./teacher.service";
 import { CalendarImportService } from "./calendar-import.service";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { RequireProfileGuard } from "../auth/require-profile.guard";
 import { RolesGuard, Roles } from "../auth/roles.guard";
 import {
   CalendarPreviewDto,
@@ -31,7 +32,7 @@ import {
 
 @ApiTags("teachers")
 @Controller("teachers")
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RequireProfileGuard, RolesGuard)
 @Roles("teacher")
 @ApiBearerAuth()
 export class TeacherController {

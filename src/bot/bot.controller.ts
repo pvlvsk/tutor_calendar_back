@@ -26,7 +26,7 @@ import {
 interface AuthRequest {
   user: {
     sub: string; // userId из JWT
-    telegramId: number;
+    telegramId: number | null;
     role: string;
     profileId: string;
     isBetaTester: boolean;

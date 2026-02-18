@@ -2,11 +2,12 @@ import { Controller, Get, Patch, Body, Param, Query, UseGuards, Request } from '
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger'
 import { ParentService } from './parent.service'
 import { JwtAuthGuard } from '../auth/jwt-auth.guard'
+import { RequireProfileGuard } from '../auth/require-profile.guard'
 import { RolesGuard, Roles } from '../auth/roles.guard'
 
 @ApiTags('parents')
 @Controller('parents')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RequireProfileGuard, RolesGuard)
 @Roles('parent')
 @ApiBearerAuth()
 export class ParentController {

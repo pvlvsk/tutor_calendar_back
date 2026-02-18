@@ -22,24 +22,181 @@ Authorization: Bearer <token>
 
 ### Auth (/api/auth)
 
-- POST /init - инициализация через Telegram
-- POST /register - регистрация нового пользователя (опционально: `referralSource`)
-- POST /select-role - выбор роли (для мульти-ролевых)
-- POST /add-role - добавление новой роли (требует auth)
-- POST /activate-beta - активация бета
-- GET /beta-status - статус бета
-- POST /delete-account - мягкое удаление аккаунта (7 дней на восстановление)
-- POST /restore-account - восстановление удалённого аккаунта
+#### Telegram / MAX (Mini App)
 
-**Регистрация с referralSource:**
-```bash
-POST /api/auth/register
-{ "initData": "...", "role": "teacher", "referralSource": "manager_ivan" }
+- POST /init — инициализация через Telegram initData
+- POST /init-max — инициализация через MAX initData
+- POST /select-role — выбор роли (для мульти-ролевых)
+- POST /add-role — добавление новой роли (требует JWT)
+- POST /accept-invitation — принять разовое приглашение
+- POST /join — присоединиться по постоянной ссылке учителя/ученика (Telegram/MAX)
+- POST /join-web — присоединиться по постоянной ссылке (веб-пользователь, JWT)
+
+#### Email-аутентификация (основной поток)
+
+- POST /register-email — регистрация (email + пароль → 4-значный код на почту)
+- POST /verify-code — подтверждение кода (завершает регистрацию, выдаёт JWT)
+- POST /resend-code — переотправить код верификации
+- POST /login-email — вход по email + пароль
+- GET /me-web — получить профиль (JWT)
+- POST /forgot-password — запрос сброса пароля
+- POST /reset-password — установка нового пароля по токену
+
+#### Связывание аккаунтов
+
+- POST /link-email — привязать email к TG-аккаунту (JWT)
+- POST /link-telegram — привязать Telegram к email-аккаунту (initData + email + пароль)
+- POST /auto-link-telegram — автопривязка Telegram после email-логина в Mini App (JWT)
+- POST /auto-link-max — автопривязка MAX после email-логина в Mini App (JWT)
+- POST /link-max — привязать MAX аккаунт (JWT)
+
+#### Прочее
+
+- GET /me — профиль через Telegram initData
+- POST /refresh — обновить JWT
+- POST /activate-beta — активация бета-тестера
+- GET /beta-status — статус бета
+- POST /delete-account — мягкое удаление (7 дней на восстановление)
+- POST /restore-account — восстановление удалённого аккаунта
+
+**Поток регистрации по email (с кодом):**
+
+```
+1. POST /api/auth/register-email
+   Body: { email, password, firstName, role, lastName?, referralSource? }
+   Response: { pendingVerification: true, userId, email, role }
+
+2. Пользователь получает 4-значный код на email (действителен 10 минут)
+
+3. POST /api/auth/verify-code
+   Body: { userId, code, role }
+   Response: { token, user, roles, currentRole }
+
+   При неверном коде: 400 INVALID_CODE
+   При истёкшем коде: 400 CODE_EXPIRED (нужно POST /resend-code)
+
+4. POST /api/auth/resend-code (при необходимости)
+   Body: { userId }
+   Response: { success: true }
+```
+
+**JWT:** токен действителен 30 дней. После истечения — повторный вход email + пароль (без кода).
+
+**Поток автопривязки MAX (после email-логина в MAX Mini App):**
+
+```
+1. Пользователь открывает Mini App в MAX
+2. initAuth на фронте определяет platform='max'
+3. POST /api/auth/init-max { initData }
+   — Если maxId привязан → возвращает token, user с maxId
+   — Если нет → isNewUser: true → показываем email-логин
+
+4. Пользователь логинится по email + пароль → POST /api/auth/login-email
+5. После успешного логина фронт автоматически вызывает:
+   POST /api/auth/auto-link-max { initData }
+   Authorization: Bearer <token>
+
+6. Бэкенд привязывает MAX ID к аккаунту
+7. Фронт обновляет user через GET /api/auth/me-web
+
+При следующем входе в MAX → init-max найдёт пользователя по maxId → авто-логин.
+```
+
+**Ручная привязка MAX (из профиля):**
+
+```
+POST /api/auth/link-max
+Authorization: Bearer <token>
+{ "initData": "<MAX initData>" }
+
+Ошибки:
+- 401 INVALID_MAX_INIT_DATA — невалидные данные MAX
+- 409 MAX_ACCOUNT_ALREADY_LINKED — этот MAX ID уже привязан к другому аккаунту
+```
+
+**Универсальные ссылки-приглашения (Invite Gateway):**
+
+```
+Все ссылки-приглашения (T_xxx, P_xxx, INV_xxx) ведут на:
+  https://tutorscalendar.ru/invite/{CODE}
+
+Формат URL генерируется через generateInviteUrl(code) на бэкенде.
+Fallback: https://tutorscalendar.ru (если WEBAPP_URL не задан в env).
+
+На странице InviteGateway пользователь выбирает платформу:
+  1. Telegram — открывает t.me/bot?startapp=CODE
+  2. MAX — открывает max.ru/bot?startapp=CODE
+  3. Браузер (Web) — два варианта:
+     a) Авторизован → POST /api/auth/join-web (JWT) → принять приглашение
+     b) Не авторизован → сохраняет CODE в sessionStorage → логин/регистрация →
+        после успешного входа authSlice подхватывает код и вызывает acceptInvitation
+```
+
+**POST /api/auth/join-web (новый эндпоинт):**
+
+```
+Authorization: Bearer <token>
+Body: { "referralCode": "T_abc123" }
+
+Маршрутизация по префиксу:
+  T_xxx → linkStudentToTeacher (создаёт/находит studentProfile, привязывает к учителю)
+  P_xxx → linkParentToStudent (создаёт/находит parentProfile, привязывает к ученику)
+
+Ответ аналогичен POST /join, но без TG-уведомлений (веб-пользователь).
+
+Ошибки:
+  - 404 USER_NOT_FOUND — пользователь JWT не найден
+  - 404 TEACHER_NOT_FOUND — учитель по T_ коду не найден
+  - 404 STUDENT_NOT_FOUND — ученик по P_ коду не найден
+  - 400 INVALID_REFERRAL_CODE — неизвестный формат кода
+  - 400 STUDENT_HAS_NO_TEACHERS — у ученика нет привязанных учителей
+```
+
+#### Безопасность: RequireProfileGuard
+
+Контроллеры teacher, student, parent защищены `RequireProfileGuard`.
+Если JWT токен не содержит `profileId`, запрос блокируется с ошибкой `403 PROFILE_REQUIRED`.
+
+Это защищает от ситуации, когда TypeORM при `findOne({ where: { id: undefined } })`
+тихо игнорирует undefined-условие и может вернуть данные другого пользователя.
+
+**JWT payload (все auth-сервисы):**
+
+```json
+{
+  "sub": "user-uuid",
+  "telegramId": 705554674,
+  "maxId": 15071600,
+  "role": "teacher",
+  "profileId": "teacher-profile-uuid",
+  "isBetaTester": false
+}
+```
+
+Все три auth-сервиса (auth.service, email-auth.service, max-auth.service) генерируют
+токены с одинаковым набором полей, включая `profileId`.
+
+#### formatUser: обязательные поля
+
+Все `formatUser` методы возвращают одинаковый набор полей:
+
+```json
+{
+  "id": "user-uuid",
+  "telegramId": 705554674,
+  "maxId": "15071600",
+  "firstName": "Dmitriy",
+  "lastName": "Pavlovskii",
+  "username": "dpavlovskii",
+  "email": "pvlvsk.d@gmail.com",
+  "emailVerified": true,
+  "isBetaTester": false
+}
 ```
 
 ### Teachers (/api/teachers)
 
-Требует роль: teacher
+Требует роль: teacher. Защищён `RequireProfileGuard` (403 если нет profileId).
 
 - GET/PATCH /me - профиль
 - GET /me/invite-link - ссылка приглашения
@@ -57,7 +214,7 @@ POST /api/auth/register
 
 ### Students (/api/students)
 
-Требует роль: student
+Требует роль: student. Защищён `RequireProfileGuard`.
 
 - GET/PATCH /me - профиль
 - GET /me/parent-invite-link
@@ -71,7 +228,7 @@ POST /api/auth/register
 
 ### Parents (/api/parents)
 
-Требует роль: parent
+Требует роль: parent. Защищён `RequireProfileGuard`.
 
 - GET/PATCH /me - профиль
 - GET /me/children
@@ -198,7 +355,7 @@ PostgreSQL через TypeORM.
 
 Entities:
 
-- User — пользователь (с полями `referralSource`, `deletedAt` для soft delete)
+- User — пользователь (email, telegramId, maxId, referralSource, emailVerified, deletedAt)
 - TeacherProfile
 - StudentProfile
 - ParentProfile

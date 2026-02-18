@@ -46,13 +46,12 @@ export function getBotUsername(): string {
 }
 
 /**
- * Генерирует ссылку на Mini App
- * Формат без /app работает с основным Mini App бота (через Menu Button)
+ * Генерирует универсальную ссылку-приглашение.
+ * Ведёт на веб-приложение, где пользователь выбирает платформу (Telegram / MAX / Web).
  */
 export function generateInviteUrl(code: string): string {
-  const bot = getBotUsername();
-  // Используем формат ?startapp= для основного Mini App бота
-  return `https://t.me/${bot}?startapp=${code}`;
+  const webappUrl = process.env.WEBAPP_URL || "https://tutorscalendar.ru";
+  return `${webappUrl}/invite/${code}`;
 }
 
 /**

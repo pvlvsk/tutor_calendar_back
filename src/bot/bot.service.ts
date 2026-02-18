@@ -302,6 +302,11 @@ export class BotService {
       return false;
     }
 
+    if (!user.telegramId) {
+      this.logger.warn(`User ${studentUserId} has no telegramId, skipping TG notification`);
+      return false;
+    }
+
     const { subject, date, time, teacherName, meetingUrl } = lessonInfo;
 
     let text =
@@ -417,6 +422,8 @@ export class BotService {
       if (lesson.meetingUrl) {
         text += `\n🔗 <a href="${lesson.meetingUrl}">Присоединиться к встрече</a>`;
       }
+
+      if (!ls.student.user.telegramId) continue;
 
       await this.sendMessageWithMiniApp(
         ls.student.user.telegramId,

@@ -17,17 +17,42 @@ export class User {
   @PrimaryGeneratedColumn("uuid")
   id: string;
 
-  @Column({ type: "bigint", unique: true })
-  telegramId: string;
+  /** Telegram ID (nullable -- веб-пользователи могут не иметь Telegram) */
+  @Column({ type: "bigint", unique: true, nullable: true })
+  telegramId: string | null;
+
+  /** MAX messenger ID (nullable) */
+  @Column({ type: "bigint", unique: true, nullable: true })
+  maxId: string | null;
+
+  /** Email для веб-авторизации (nullable -- TG-пользователи могут не иметь email) */
+  @Column({ type: "varchar", length: 255, unique: true, nullable: true })
+  email: string | null;
+
+  /** Хэш пароля (bcrypt) */
+  @Column({ type: "varchar", length: 255, nullable: true })
+  passwordHash: string | null;
+
+  /** Подтверждён ли email */
+  @Column({ default: false })
+  emailVerified: boolean;
+
+  /** Токен для подтверждения email / сброса пароля */
+  @Column({ type: "varchar", length: 255, nullable: true })
+  emailVerificationToken: string | null;
+
+  /** Срок действия токена верификации/сброса */
+  @Column({ type: "timestamp", nullable: true })
+  emailTokenExpiresAt: Date | null;
 
   @Column({ nullable: true })
   firstName: string;
 
-  @Column({ nullable: true })
-  lastName: string;
+  @Column({ type: "varchar", nullable: true })
+  lastName: string | null;
 
-  @Column({ nullable: true })
-  username: string;
+  @Column({ type: "varchar", nullable: true })
+  username: string | null;
 
   @Column({ nullable: true })
   city: string;

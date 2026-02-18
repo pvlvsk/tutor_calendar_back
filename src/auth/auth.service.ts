@@ -53,7 +53,7 @@ function generateReferralCode(prefix: string): string {
 
 interface JwtPayload {
   sub: string;
-  telegramId: number;
+  telegramId: number | null;
   role: UserRole;
   profileId: string;
   isBetaTester: boolean;
@@ -316,12 +316,16 @@ export class AuthService {
       throw new ConflictException("ROLE_EXISTS");
     }
 
-    const profile = await this.createProfile(userId, role, {
-      id: Number(user.telegramId),
-      first_name: user.firstName || undefined,
-      last_name: user.lastName || undefined,
-      username: user.username || undefined,
-    });
+    const profile = await this.createProfile(
+      userId,
+      role,
+      user.telegramId
+        ? { id: Number(user.telegramId), first_name: user.firstName || undefined, last_name: user.lastName || undefined, username: user.username || undefined }
+        : undefined,
+      !user.telegramId
+        ? { firstName: user.firstName, lastName: user.lastName || undefined }
+        : undefined
+    );
 
     // Обновляем user с новым профилем для генерации токена
     const updatedUser = { ...user, [`${role}Profile`]: profile };
@@ -555,15 +559,16 @@ export class AuthService {
     let profile = this.getProfile(user, role);
 
     if (!profile) {
+      const fallbackTgUser = user.telegramId
+        ? { id: Number(user.telegramId), first_name: user.firstName || undefined, last_name: user.lastName || undefined, username: user.username || undefined }
+        : undefined;
       profile = await this.createProfile(
         user.id,
         role,
-        telegramUser || {
-          id: Number(user.telegramId),
-          first_name: user.firstName || undefined,
-          last_name: user.lastName || undefined,
-          username: user.username || undefined,
-        }
+        telegramUser || fallbackTgUser,
+        !telegramUser && !fallbackTgUser
+          ? { firstName: user.firstName, lastName: user.lastName || undefined }
+          : undefined
       );
       (user as any)[`${role}Profile`] = profile;
     }
@@ -667,29 +672,60 @@ export class AuthService {
   }
 
   /**
-   * Присоединение ученика к учителю по T_xxx коду
+   * Присоединение по постоянной ссылке для web-пользователей (по userId из JWT).
+   * Использует те же внутренние методы, что и joinByReferral (Telegram),
+   * но получает User из JWT, а не из initData.
    */
-  private async joinTeacher(telegramUser: TelegramUser, referralCode: string) {
+  async joinByReferralWeb(userId: string, referralCode: string) {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ["teacherProfile", "studentProfile", "parentProfile"],
+    });
+
+    if (!user) {
+      this.logger.warn(`JoinWeb failed: user not found userId=${userId}`);
+      throw new NotFoundException("USER_NOT_FOUND");
+    }
+
+    this.logger.log(`JoinWeb: userId=${userId} code=${referralCode}`);
+
+    if (referralCode.startsWith("T_")) {
+      return this.linkStudentToTeacher(user, referralCode, null);
+    } else if (referralCode.startsWith("P_")) {
+      return this.linkParentToStudent(user, referralCode, null);
+    } else {
+      this.logger.warn(`JoinWeb failed: invalid code format code=${referralCode}`);
+      throw new BadRequestException("INVALID_REFERRAL_CODE");
+    }
+  }
+
+  /**
+   * Присоединение ученика к учителю по T_xxx коду.
+   * Общая логика для Telegram и Web — различие только в источнике User
+   * и отправке TG-уведомлений.
+   */
+  private async linkStudentToTeacher(
+    user: User,
+    referralCode: string,
+    telegramUser: TelegramUser | null,
+  ) {
     const teacher = await this.teacherProfileRepository.findOne({
       where: { referralCode },
       relations: ["user"],
     });
 
     if (!teacher) {
-      this.logger.warn(
-        `JoinTeacher failed: teacher not found code=${referralCode}`
-      );
+      this.logger.warn(`JoinTeacher failed: teacher not found code=${referralCode}`);
       throw new NotFoundException("TEACHER_NOT_FOUND");
     }
-
-    let user = await this.findOrCreateUser(telegramUser);
 
     let studentProfile = user.studentProfile;
     if (!studentProfile) {
       studentProfile = (await this.createProfile(
         user.id,
         "student",
-        telegramUser
+        telegramUser || undefined,
+        !telegramUser ? { firstName: user.firstName || undefined, lastName: user.lastName || undefined } : undefined,
       )) as StudentProfile;
       user.studentProfile = studentProfile;
     }
@@ -703,31 +739,20 @@ export class AuthService {
     const token = this.generateToken(user, "student");
 
     this.logger.log(
-      `JoinTeacher: tg=${telegramUser.id} linked to teacher=${teacher.id}, isNewConnection=${isNewConnection}`
+      `JoinTeacher: user=${user.id} linked to teacher=${teacher.id}, isNewConnection=${isNewConnection}`
     );
 
-    // Отправляем уведомления ТОЛЬКО если связь новая
-    if (isNewConnection) {
-      // Приветственное уведомление ученику
+    if (isNewConnection && telegramUser) {
       this.botService
         .notifyUserWelcome(telegramUser.id, "student", teacher.displayName)
         .catch((err) => {
-          this.logger.warn(
-            `Failed to send welcome notification: ${err.message}`
-          );
+          this.logger.warn(`Failed to send welcome notification: ${err.message}`);
         });
 
-      // Уведомляем учителя о новом ученике
       if (teacher.user?.telegramId) {
-        const studentName = formatFullName(
-          telegramUser.first_name,
-          telegramUser.last_name
-        );
+        const studentName = formatFullName(telegramUser.first_name, telegramUser.last_name);
         this.botService
-          .notifyTeacherNewStudent(
-            teacher.user.telegramId,
-            studentName || "Новый ученик"
-          )
+          .notifyTeacherNewStudent(teacher.user.telegramId, studentName || "Новый ученик")
           .catch((err) => {
             this.logger.warn(`Failed to notify teacher: ${err.message}`);
           });
@@ -750,11 +775,22 @@ export class AuthService {
   }
 
   /**
-   * Присоединение родителя к ученику по P_xxx коду
+   * Присоединение ученика к учителю — Telegram entry point.
+   * Находит/создаёт User по TG initData, затем вызывает общую логику.
    */
-  private async joinAsParent(
-    telegramUser: TelegramUser,
-    parentInviteCode: string
+  private async joinTeacher(telegramUser: TelegramUser, referralCode: string) {
+    const user = await this.findOrCreateUser(telegramUser);
+    return this.linkStudentToTeacher(user, referralCode, telegramUser);
+  }
+
+  /**
+   * Присоединение родителя к ученику по P_xxx коду.
+   * Общая логика для Telegram и Web.
+   */
+  private async linkParentToStudent(
+    user: User,
+    parentInviteCode: string,
+    telegramUser: TelegramUser | null,
   ) {
     const student = await this.studentProfileRepository.findOne({
       where: { parentInviteCode },
@@ -762,20 +798,13 @@ export class AuthService {
     });
 
     if (!student) {
-      this.logger.warn(
-        `JoinAsParent failed: student not found code=${parentInviteCode}`
-      );
+      this.logger.warn(`JoinAsParent failed: student not found code=${parentInviteCode}`);
       throw new NotFoundException("STUDENT_NOT_FOUND");
     }
 
-    let user = await this.findOrCreateUser(telegramUser);
-
-    // Проверяем что у ученика есть хотя бы один учитель
-    // (связь parent-student требует teacherId в текущей архитектуре)
+    // Связь parent-student требует teacherId в текущей архитектуре
     if (!student.teacherStudentLinks || student.teacherStudentLinks.length === 0) {
-      this.logger.warn(
-        `JoinAsParent failed: student has no teachers code=${parentInviteCode}`
-      );
+      this.logger.warn(`JoinAsParent failed: student has no teachers code=${parentInviteCode}`);
       throw new BadRequestException("STUDENT_HAS_NO_TEACHERS");
     }
 
@@ -784,12 +813,12 @@ export class AuthService {
       parentProfile = (await this.createProfile(
         user.id,
         "parent",
-        telegramUser
+        telegramUser || undefined,
+        !telegramUser ? { firstName: user.firstName || undefined, lastName: user.lastName || undefined } : undefined,
       )) as ParentProfile;
       user.parentProfile = parentProfile;
     }
 
-    // Проверяем, есть ли хотя бы одна новая связь
     let isNewConnection = false;
     for (const link of student.teacherStudentLinks) {
       const result = await this.ensureParentStudentRelation(
@@ -806,17 +835,14 @@ export class AuthService {
     const token = this.generateToken(user, "parent");
 
     this.logger.log(
-      `JoinAsParent: tg=${telegramUser.id} linked to student=${student.id}, isNewConnection=${isNewConnection}`
+      `JoinAsParent: user=${user.id} linked to student=${student.id}, isNewConnection=${isNewConnection}`
     );
 
-    // Отправляем уведомление ТОЛЬКО если связь новая
-    if (isNewConnection) {
+    if (isNewConnection && telegramUser) {
       this.botService
         .notifyUserWelcome(telegramUser.id, "parent")
         .catch((err) => {
-          this.logger.warn(
-            `Failed to send welcome notification: ${err.message}`
-          );
+          this.logger.warn(`Failed to send welcome notification: ${err.message}`);
         });
     }
 
@@ -831,6 +857,14 @@ export class AuthService {
         name: formatFullName(student.user.firstName, student.user.lastName),
       },
     };
+  }
+
+  /**
+   * Присоединение родителя к ученику — Telegram entry point.
+   */
+  private async joinAsParent(telegramUser: TelegramUser, parentInviteCode: string) {
+    const user = await this.findOrCreateUser(telegramUser);
+    return this.linkParentToStudent(user, parentInviteCode, telegramUser);
   }
 
   // ============================================
@@ -951,15 +985,18 @@ export class AuthService {
   private async createProfile(
     userId: string,
     role: UserRole,
-    telegramUser: TelegramUser
+    telegramUser?: TelegramUser,
+    userInfo?: { firstName?: string; lastName?: string }
   ) {
+    const firstName = telegramUser?.first_name || userInfo?.firstName;
+    const lastName = telegramUser?.last_name || userInfo?.lastName;
+
     switch (role) {
       case "teacher": {
         const profile = this.teacherProfileRepository.create({
           userId,
           displayName:
-            formatFullName(telegramUser.first_name, telegramUser.last_name) ||
-            "Учитель",
+            formatFullName(firstName, lastName) || "Учитель",
           referralCode: generateReferralCode("T"),
         });
         return this.teacherProfileRepository.save(profile);
@@ -985,7 +1022,7 @@ export class AuthService {
     const profile = this.getProfile(user, role);
     const payload: JwtPayload = {
       sub: user.id,
-      telegramId: Number(user.telegramId),
+      telegramId: user.telegramId ? Number(user.telegramId) : null,
       role,
       profileId: profile?.id || "",
       isBetaTester: user.isBetaTester || false,
@@ -999,10 +1036,13 @@ export class AuthService {
   private formatUser(user: User) {
     return {
       id: user.id,
-      telegramId: Number(user.telegramId),
+      telegramId: user.telegramId ? Number(user.telegramId) : null,
+      maxId: user.maxId || null,
       firstName: user.firstName,
       lastName: user.lastName,
       username: user.username,
+      email: user.email || null,
+      emailVerified: user.emailVerified || false,
       isBetaTester: user.isBetaTester || false,
     };
   }

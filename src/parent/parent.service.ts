@@ -64,7 +64,7 @@ export class ParentService {
       id: profile.id,
       userId: profile.userId,
       user: {
-        telegramId: Number(profile.user.telegramId),
+        telegramId: profile.user.telegramId ? Number(profile.user.telegramId) : null,
         firstName: profile.user.firstName,
         lastName: profile.user.lastName,
         username: profile.user.username,
